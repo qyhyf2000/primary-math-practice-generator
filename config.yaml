@@ -1,0 +1,108 @@
+# =============================================================
+# 小学数学练习试卷生成系统 — 配置文件
+# 修改此文件即可调整年级、题型、难度分布、排版等所有参数
+# =============================================================
+
+# ---- 年级配置（升年级时修改此处） ----
+grade:
+  name: "二年级"
+  term: "下册"
+  textbook: "北师大版"
+
+# ---- 试卷结构（时间预算约20分钟） ----
+exam:
+  title_template: "{textbook}{grade}数学{term}周末练习卷（第{week}周）"
+  total_score: 60
+  sections:
+    - id: oral_calc
+      title: "一、口算题"
+      count: 10
+      score_per_question: 1
+      difficulty_range: [1, 2]
+      time_minutes: 3
+
+    - id: fill_blank
+      title: "二、填空题"
+      count: 6
+      score_per_question: 2
+      difficulty_range: [1, 4]
+      time_minutes: 4
+
+    - id: choice
+      title: "三、选择题"
+      count: 4
+      score_per_question: 2
+      difficulty_range: [2, 4]
+      time_minutes: 3
+
+    - id: vertical_calc
+      title: "四、竖式/脱式计算"
+      count: 3
+      score_per_question: 4
+      difficulty_range: [2, 5]
+      time_minutes: 5
+
+    - id: word_problem
+      title: "五、解决问题"
+      count: 2
+      score_per_question: 6
+      difficulty_range: [3, 5]
+      time_minutes: 5
+
+# ---- 题库配置 ----
+question_bank:
+  db_path: "data/question_bank.db"
+  seed_on_empty: true
+
+  # 排重窗口（单位：周）
+  dedup_window_weeks: 4
+
+  # 自动更新配置
+  sync:
+    # 是否启用自动更新
+    enabled: true
+
+    # 1. 算法生成：每次更新自动生成的题目数量
+    generator_enabled: true
+    generator_count: 30
+
+    # 2. 网络抓取：免费题库站 URL（可选，为空则跳过抓取）
+    #    支持 JSON API 或简单 HTML 页面
+    scraper_url: ""
+
+    # 3. 远程 API（可选，需要第三方服务）
+    url: ""
+    api_key: ""
+
+    # 定时更新间隔（小时），0 表示仅手动触发
+    interval_hours: 0
+
+  # 本地导入目录（将 .json/.yaml 文件放入 data/import/ 自动导入）
+  import_enabled: true
+
+# ---- 排版渲染配置 ----
+rendering:
+  page:
+    size: "A4"
+    margin_top_cm: 2.0
+    margin_bottom_cm: 2.0
+    margin_left_cm: 2.5
+    margin_right_cm: 2.5
+
+  fonts:
+    title: "黑体"
+    heading: "楷体"
+    body: "宋体"
+
+  title:
+    font_size_pt: 16
+    bold: true
+    alignment: "center"
+
+  student_info:
+    fields: ["姓名", "班级", "得分"]
+    font_size_pt: 11
+
+  body:
+    font_size_pt: 12
+    line_spacing: 1.5

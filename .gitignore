@@ -1,0 +1,21 @@
+# 题库数据库（本地使用，不提交）
+data/question_bank.db
+
+# 生成的试卷输出
+output/*.docx
+!output/.gitkeep
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+
+# IDE
+.vscode/
+.idea/
+
+# 日志
+logs/
+*.log
