@@ -7,6 +7,14 @@ from .layout import (
     add_paragraph, set_cjk_font, set_cell_border,
     cell_add_run, set_table_borders,
 )
+from .graphics_renderer import (
+    render_angle_question, render_count_angles_question,
+    render_grid_count_question, render_angle_drawing,
+    render_clock_question, render_clock_time_question,
+    render_cube_stack_question, render_cube_view_question,
+    render_shape_judge_question, render_shape_classify_question,
+    render_tangram_question, render_parallelogram_question,
+)
 from ..question_bank.models import ExamSection
 
 
@@ -14,6 +22,123 @@ FONT = "宋体"
 HEADING_FONT = "楷体"
 BODY_SIZE = 12
 HEADING_SIZE = 12
+
+
+def _parse_graphic_info(q) -> dict:
+    """从题目的 tags 中解析图形渲染信息。
+
+    graphic 数据以 'graphic:' 开头，后面跟 JSON。
+    由于 JSON 内部含逗号，不能简单按逗号 split。
+    """
+    if not q.tags:
+        return None
+    # 找到 graphic: 的位置
+    idx = q.tags.find("graphic:")
+    if idx < 0:
+        return None
+    # 提取 graphic: 之后的所有内容作为 JSON
+    json_str = q.tags[idx + len("graphic:"):].strip()
+    # 找到 JSON 对象结束的 }
+    # 简单方法：从开头找匹配的大括号
+    if not json_str.startswith("{"):
+        return None
+    depth = 0
+    end = 0
+    for i, ch in enumerate(json_str):
+        if ch == "{":
+            depth += 1
+        elif ch == "}":
+            depth -= 1
+            if depth == 0:
+                end = i + 1
+                break
+    if end == 0:
+        return None
+    try:
+        return json.loads(json_str[:end])
+    except json.JSONDecodeError:
+        return None
+
+
+def _render_graphic_question(doc, idx: int, q):
+    """根据 graphic 信息渲染图形题"""
+    info = _parse_graphic_info(q)
+    if not info:
+        # 无图形信息，回退到普通段落
+        p = doc.add_paragraph()
+        p.paragraph_format.space_after = Pt(4)
+        run = p.add_run(f"{idx + 1}. {q.content}")
+        set_cjk_font(run, FONT, BODY_SIZE)
+        return
+
+    gtype = info.get("type", "")
+
+    if gtype == "angle_identify":
+        angles = [(a["label"], a["symbol"]) for a in info.get("angles", [])]
+        render_angle_question(doc, idx + 1, q.content, angles)
+
+    elif gtype == "angle_judge":
+        shapes = [(s["symbol"], s["label"]) for s in info.get("shapes", [])]
+        render_shape_judge_question(doc, idx + 1, q.content, shapes)
+
+    elif gtype == "count_angles":
+        shapes = [(s["symbol"], s["label"]) for s in info.get("shapes", [])]
+        render_count_angles_question(doc, idx + 1, q.content, shapes)
+
+    elif gtype == "grid_count":
+        render_grid_count_question(
+            doc, idx + 1, q.content,
+            rows=info.get("rows", 2),
+            cols=info.get("cols", 2),
+        )
+
+    elif gtype == "draw_grid":
+        render_grid_count_question(
+            doc, idx + 1, q.content,
+            rows=info.get("rows", 4),
+            cols=info.get("cols", 6),
+        )
+
+    elif gtype == "draw_angle":
+        render_angle_drawing(doc, idx + 1, q.content)
+
+    elif gtype == "clock":
+        clocks = info.get("clocks", [])
+        render_clock_question(doc, idx + 1, q.content, clocks)
+
+    elif gtype == "clock_time":
+        times = [(t["time"], t["label"]) for t in info.get("times", [])]
+        render_clock_time_question(doc, idx + 1, q.content, times)
+
+    elif gtype == "cube_stack":
+        grid = info.get("grid", [[1]])
+        render_cube_stack_question(doc, idx + 1, q.content, grid)
+
+    elif gtype == "cube_view":
+        render_cube_view_question(
+            doc, idx + 1, q.content,
+            front_view=info.get("front", [1]),
+            side_view=info.get("side", [1]),
+        )
+
+    elif gtype == "shape_classify":
+        shapes = [(s["symbol"], s.get("label", "")) for s in info.get("shapes", [])]
+        render_shape_classify_question(doc, idx + 1, q.content, shapes)
+
+    elif gtype == "tangram":
+        grid = info.get("grid", [["r"]])
+        pieces = info.get("pieces", [])
+        render_tangram_question(doc, idx + 1, q.content, grid, pieces)
+
+    elif gtype == "parallelogram":
+        render_parallelogram_question(doc, idx + 1, q.content)
+
+    else:
+        # 未知图形类型，回退
+        p = doc.add_paragraph()
+        p.paragraph_format.space_after = Pt(4)
+        run = p.add_run(f"{idx + 1}. {q.content}")
+        set_cjk_font(run, FONT, BODY_SIZE)
 
 
 def render_section_heading(doc, section: ExamSection):
@@ -43,32 +168,48 @@ def render_oral_calc(doc, section: ExamSection):
 
 
 def render_fill_blank(doc, section: ExamSection):
-    """填空题 — 段落形式，每题一段"""
+    """填空题 — 段落形式，图形题用专用渲染器"""
     for idx, q in enumerate(section.questions):
-        p = doc.add_paragraph()
-        p.paragraph_format.space_after = Pt(4)
-        run = p.add_run(f"{idx + 1}. {q.content}")
-        set_cjk_font(run, FONT, BODY_SIZE)
+        if "图形" in (q.tags or ""):
+            _render_graphic_question(doc, idx, q)
+        else:
+            p = doc.add_paragraph()
+            p.paragraph_format.space_after = Pt(4)
+            run = p.add_run(f"{idx + 1}. {q.content}")
+            set_cjk_font(run, FONT, BODY_SIZE)
 
 
 def render_choice(doc, section: ExamSection):
-    """选择题 — 每题一段，选项横向排列"""
+    """选择题 — 每题一段，选项横向排列，图形题用专用渲染器"""
     for idx, q in enumerate(section.questions):
-        # 题干
-        p = doc.add_paragraph()
-        p.paragraph_format.space_after = Pt(2)
-        run = p.add_run(f"{idx + 1}. {q.content}")
-        set_cjk_font(run, FONT, BODY_SIZE)
-
-        # 选项
-        options = q.get_options_list()
-        if options:
-            opt_p = doc.add_paragraph()
-            opt_p.paragraph_format.space_after = Pt(4)
-            opt_p.paragraph_format.left_indent = Cm(0.8)
-            opt_text = "     ".join(options)
-            run = opt_p.add_run(opt_text)
+        if "图形" in (q.tags or ""):
+            # 先用图形渲染器画图形
+            _render_graphic_question(doc, idx, q)
+            # 再渲染选项
+            options = q.get_options_list()
+            if options:
+                opt_p = doc.add_paragraph()
+                opt_p.paragraph_format.space_after = Pt(4)
+                opt_p.paragraph_format.left_indent = Cm(0.8)
+                opt_text = "     ".join(options)
+                run = opt_p.add_run(opt_text)
+                set_cjk_font(run, FONT, BODY_SIZE)
+        else:
+            # 题干
+            p = doc.add_paragraph()
+            p.paragraph_format.space_after = Pt(2)
+            run = p.add_run(f"{idx + 1}. {q.content}")
             set_cjk_font(run, FONT, BODY_SIZE)
+
+            # 选项
+            options = q.get_options_list()
+            if options:
+                opt_p = doc.add_paragraph()
+                opt_p.paragraph_format.space_after = Pt(4)
+                opt_p.paragraph_format.left_indent = Cm(0.8)
+                opt_text = "     ".join(options)
+                run = opt_p.add_run(opt_text)
+                set_cjk_font(run, FONT, BODY_SIZE)
 
 
 def render_vertical_calc(doc, section: ExamSection):

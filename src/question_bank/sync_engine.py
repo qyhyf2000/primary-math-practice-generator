@@ -57,12 +57,10 @@ class SyncEngine:
             result["error"] = gen_result["error"]
 
         # 2. 网络抓取
-        scraper_url = self.sync_config.get("scraper_url", "")
-        if scraper_url:
-            scrape_result = self._scrape_from_web(scraper_url)
-            result["scraped"] = scrape_result["added"]
-            if scrape_result.get("error") and not result["error"]:
-                result["error"] = scrape_result["error"]
+        scrape_result = self._scrape_urls()
+        result["scraped"] = scrape_result["added"]
+        if scrape_result.get("error") and not result["error"]:
+            result["error"] = scrape_result["error"]
 
         # 3. 远程 API
         api_url = self.sync_config.get("url", "")
@@ -106,113 +104,60 @@ class SyncEngine:
     # 来源2：网络抓取
     # ================================================================
 
-    def _scrape_from_web(self, url: str) -> dict:
-        """
-        从免费教育网站抓取题目。
+    def _scrape_urls(self) -> dict:
+        """从配置的URL列表抓取题目"""
+        from .scrapers import scrape_urls, KNOWN_51TEST_URLS
 
-        支持的模式：
-        - url 是具体 JSON API 地址时，直接请求解析
-        - url 为空时跳过
-        """
-        if not url:
+        # 收集所有要抓取的URL
+        urls = []
+
+        # 配置中的单个URL
+        scraper_url = self.sync_config.get("scraper_url", "")
+        if scraper_url:
+            urls.append(scraper_url)
+
+        # 配置中的URL列表
+        scraper_urls = self.sync_config.get("scraper_urls", [])
+        if isinstance(scraper_urls, list):
+            urls.extend(scraper_urls)
+        elif isinstance(scraper_urls, str) and scraper_urls:
+            urls.append(scraper_urls)
+
+        # 如果配置允许使用内置URL
+        if self.sync_config.get("use_builtin_urls", False):
+            urls.extend(KNOWN_51TEST_URLS)
+
+        if not urls:
             return {"added": 0, "skipped": 0, "error": None}
 
         try:
-            headers = {
-                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-                              "AppleWebKit/537.36 (KHTML, like Gecko) "
-                              "Chrome/120.0.0.0 Safari/537.36"
-            }
-            api_key = self.sync_config.get("api_key", "")
-            if api_key:
-                headers["Authorization"] = f"Bearer {api_key}"
-
-            resp = requests.get(url, headers=headers, timeout=30)
-            resp.raise_for_status()
-
-            # 尝试 JSON
-            content_type = resp.headers.get("Content-Type", "")
-            if "json" in content_type:
-                data = resp.json()
-                return self._process_remote_questions(data)
-            else:
-                # HTML 页面 — 尝试提取题目
-                return self._scrape_html(resp.text)
-        except requests.RequestException as e:
-            logger.warning(f"网络抓取失败: {e}")
+            raw_questions = scrape_urls(urls)
+        except Exception as e:
+            logger.warning(f"抓取失败: {e}")
             return {"added": 0, "skipped": 0, "error": str(e)}
 
-    def _scrape_html(self, html: str) -> dict:
-        """
-        从 HTML 页面中提取数学题。
-
-        针对常见题库站点的页面结构做简单解析。
-        对于复杂的反爬页面，此方法可能无法正常工作，
-        但不会阻塞其他更新来源。
-
-        支持的简单模式：
-        - <div class="question"> 或 <p class="timu">
-        - 纯文本行中包含 "÷ × + - =" 运算符号的行
-        """
         added = 0
         skipped = 0
+        for item in raw_questions:
+            content = item.get("content", "")
+            if not content or self.db.content_exists(content):
+                skipped += 1
+                continue
 
-        try:
-            from html.parser import HTMLParser
-
-            class QuestionParser(HTMLParser):
-                def __init__(self):
-                    super().__init__()
-                    self.questions = []
-                    self.in_question = False
-                    self.current = ""
-
-                def handle_starttag(self, tag, attrs):
-                    attrs_dict = dict(attrs)
-                    cls = attrs_dict.get("class", "")
-                    if "question" in cls.lower() or "timu" in cls.lower():
-                        self.in_question = True
-                        self.current = ""
-
-                def handle_endtag(self, tag):
-                    if self.in_question and tag in ("div", "p", "li"):
-                        self.in_question = False
-                        text = self.current.strip()
-                        if text and any(op in text for op in "÷×+-="):
-                            self.questions.append(text)
-
-                def handle_data(self, data):
-                    if self.in_question:
-                        self.current += data
-
-            parser = QuestionParser()
-            parser.feed(html)
-
-            for text in parser.questions[:50]:
-                if self.db.content_exists(text):
-                    skipped += 1
-                    continue
-                # 简单题目：无法确定unit/section时标记为待分类
-                q = Question(
-                    unit=0, section="oral_calc", difficulty=1,
-                    content=text, answer="", source="scraped",
-                    tags="待审核",
-                )
-                self.db.insert_question(q)
-                added += 1
-
-        except Exception as e:
-            logger.warning(f"HTML解析失败: {e}")
+            q = Question(
+                unit=item.get("unit", 0),
+                section=item.get("section", "oral_calc"),
+                difficulty=item.get("difficulty", 1),
+                content=content,
+                answer=item.get("answer", ""),
+                knowledge_point=item.get("knowledge_point", ""),
+                tags=item.get("tags", f"抓取,{item.get('source_url', '')}"),
+                source="scraped",
+            )
+            self.db.insert_question(q)
+            added += 1
 
         return {"added": added, "skipped": skipped, "error": None}
-
-    # ================================================================
-    # 来源3：远程 API
-    # ================================================================
-
-    def _fetch_from_api(self, url: str) -> dict:
-        """从远程 API 获取题目"""
-        return self._scrape_from_web(url)  # 复用抓取逻辑
 
     def _process_remote_questions(self, data) -> dict:
         """处理远程返回的题目数据"""

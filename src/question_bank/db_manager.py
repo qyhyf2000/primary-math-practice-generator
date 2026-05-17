@@ -100,6 +100,7 @@ class DBManager:
         limit: int = 100,
         exclude_ids: Optional[List[int]] = None,
         unit_filter: Optional[List[int]] = None,
+        tag_filter: Optional[str] = None,
     ) -> List[Question]:
         sql = """
             SELECT id, unit, section, difficulty, content, answer, options,
@@ -119,6 +120,10 @@ class DBManager:
             placeholders = ",".join("?" * len(unit_filter))
             sql += f" AND unit IN ({placeholders})"
             params.extend(unit_filter)
+
+        if tag_filter:
+            sql += " AND tags LIKE ?"
+            params.append(f"%{tag_filter}%")
 
         sql += " ORDER BY RANDOM() LIMIT ?"
         params.append(limit)
@@ -175,6 +180,39 @@ class DBManager:
             data
         )
         self.conn.commit()
+
+    def get_usage_summary(self, weeks: int = 4) -> dict:
+        """获取最近N周内的题目使用统计"""
+        rows = self.conn.execute("""
+            SELECT question_id, COUNT(*) as use_count, MAX(used_at) as last_used
+            FROM exam_history
+            WHERE used_at >= datetime('now', 'localtime', ?)
+            GROUP BY question_id
+        """, (f"-{weeks * 7} days",)).fetchall()
+        return {
+            row[0]: {"use_count": row[1], "last_used": row[2]}
+            for row in rows
+        }
+
+    def get_available_counts(self, weeks: int = 4) -> dict:
+        """按题型统计可用/已用/总数"""
+        used_ids = [str(x) for x in self.get_recently_used_ids(weeks)]
+        rows = self.conn.execute(
+            "SELECT section, COUNT(*) FROM questions GROUP BY section"
+        ).fetchall()
+
+        result = {}
+        for section, total in rows:
+            if used_ids:
+                placeholders = ",".join("?" for _ in used_ids)
+                used = self.conn.execute(
+                    f"SELECT COUNT(*) FROM questions WHERE section = ? AND id IN ({placeholders})",
+                    [section] + used_ids
+                ).fetchone()[0]
+            else:
+                used = 0
+            result[section] = {"total": total, "used": used, "available": total - used}
+        return result
 
     def is_empty(self) -> bool:
         row = self.conn.execute("SELECT COUNT(*) FROM questions").fetchone()

@@ -44,10 +44,31 @@ SECTION_NAMES = {
 
 
 # ============================================================
+# 题型映射
+TYPE_OPTIONS = [
+    "全部题型",
+    "口算题",
+    "填空题",
+    "选择题",
+    "竖式/脱式计算",
+    "解决问题",
+    "图形题",
+]
+
+TYPE_TO_SECTION = {
+    "口算题": "oral_calc",
+    "填空题": "fill_blank",
+    "选择题": "choice",
+    "竖式/脱式计算": "vertical_calc",
+    "解决问题": "word_problem",
+    # "图形题" 用 tag 过滤，不走 section filter
+}
+
+
 # 回调函数
 # ============================================================
 
-def on_generate(week: str, units_selected: list) -> tuple:
+def on_generate(week: str, units_selected: list, section_type: str) -> tuple:
     """生成试卷"""
     # 提取单元编号
     units = []
@@ -60,16 +81,31 @@ def on_generate(week: str, units_selected: list) -> tuple:
     if not units:
         return "请至少选择一个单元", None
 
+    # 解析题型过滤
+    section_filter = None
+    tag_filter = None
+    if section_type and section_type != "全部题型":
+        if section_type == "图形题":
+            tag_filter = "图形"
+        elif section_type in TYPE_TO_SECTION:
+            section_filter = [TYPE_TO_SECTION[section_type]]
+
     db = DBManager(config.get_db_path())
     try:
         if db.is_empty():
             db.insert_batch(get_all_seed_questions())
 
         builder = ExamBuilder(config, db)
-        exam = builder.build_exam(week_label=week or "", unit_filter=units)
+        exam = builder.build_exam(
+            week_label=week or "",
+            unit_filter=units,
+            section_filter=section_filter,
+            tag_filter=tag_filter,
+        )
 
         renderer = DocxRenderer(config)
-        output_name = f"{config.grade_name}{config.grade_term}_周末练习卷"
+        type_tag = f"_{section_type}" if section_type != "全部题型" else ""
+        output_name = f"{config.grade_name}{config.grade_term}_周末练习卷{type_tag}"
         if week:
             output_name += f"_第{week}周"
         output_name += f"_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
@@ -78,13 +114,11 @@ def on_generate(week: str, units_selected: list) -> tuple:
 
         lines = [
             exam.title,
-            f"总分: {exam.total_score} 分 | 共 {exam.total_questions} 题",
+            f"题型: {section_type or '全部'} | 总分: {exam.total_score} 分 | 共 {exam.total_questions} 题",
             "",
         ]
         for sec in exam.sections:
-            lines.append(
-                f"  {sec.title}: {len(sec.questions)}题 / {sec.total_score}分"
-            )
+            lines.append(f"  {sec.title}: {len(sec.questions)}题 / {sec.total_score}分")
 
         return "\n".join(lines), filepath
     except Exception as e:
@@ -96,29 +130,48 @@ def on_generate(week: str, units_selected: list) -> tuple:
 
 
 def on_refresh_stats() -> tuple:
-    """刷新题库统计"""
+    """刷新题库统计，含已用标记"""
     db = DBManager(config.get_db_path())
     try:
         if db.is_empty():
-            return "题库为空，请先在「生成试卷」页生成一次试卷以导入初始数据", []
+            return "题库为空，请先在「生成试卷」页生成一次试卷以导入初始数据", [], ""
 
         total, by_section = db.get_question_count()
         available_units = db.get_available_units()
+        usage = db.get_available_counts(weeks=4)
 
+        # 概览
+        total_used = sum(v["used"] for v in usage.values())
         overview = (
-            f"**题目总数**: {total} 题\n\n"
+            f"**题目总数**: {total} 题 | **最近4周已使用**: {total_used} 题 | "
+            f"**可用**: {total - total_used} 题\n\n"
             f"**涵盖单元**: {', '.join(str(u) for u in available_units)}\n\n"
             f"**教材**: {config.textbook} {config.grade_name}{config.grade_term}"
         )
 
+        # 分布表（含已用列）
         rows = []
         for section_id, name in SECTION_NAMES.items():
             dist = by_section.get(section_id, {})
             subtotal = sum(dist.values())
-            row = [name] + [dist.get(i, 0) for i in range(1, 6)] + [subtotal]
+            u = usage.get(section_id, {"used": 0, "available": subtotal})
+            row = (
+                [name]
+                + [dist.get(i, 0) for i in range(1, 6)]
+                + [subtotal]
+                + [u["used"], u["available"]]
+            )
             rows.append(row)
 
-        return overview, rows
+        # 已用题目标记摘要
+        dedup_weeks = config.get_dedup_window_weeks()
+        label_info = (
+            f"排重窗口: {dedup_weeks} 周 | "
+            f"窗口内已用 {total_used} 题 | "
+            f"剩余可用 {total - total_used} 题"
+        )
+
+        return overview, rows, label_info
     finally:
         db.close()
 
@@ -136,6 +189,37 @@ def on_reload_seed() -> str:
         import traceback
         traceback.print_exc()
         return f"重置失败: {e}"
+    finally:
+        db.close()
+
+
+def on_scrape_url(url: str) -> str:
+    """从指定 URL 抓取题目"""
+    if not url or not url.startswith("http"):
+        return "请输入有效的 URL"
+    db = DBManager(config.get_db_path())
+    try:
+        from src.question_bank.scrapers import scrape_urls
+        raw = scrape_urls([url])
+        added = 0
+        for item in raw:
+            if not db.content_exists(item["content"]):
+                from src.question_bank.models import Question
+                q = Question(
+                    unit=item.get("unit", 0),
+                    section=item.get("section", "oral_calc"),
+                    difficulty=item.get("difficulty", 1),
+                    content=item["content"],
+                    answer=item.get("answer", ""),
+                    source="scraped",
+                )
+                db.insert_question(q)
+                added += 1
+        return f"从 {url[-40:]} 抓取到 {len(raw)} 题，新入库 {added} 题"
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return f"抓取失败: {e}"
     finally:
         db.close()
 
@@ -242,6 +326,11 @@ def build_ui():
         with gr.Tab("生成试卷"):
             with gr.Row():
                 with gr.Column(scale=1):
+                    section_type = gr.Dropdown(
+                        choices=TYPE_OPTIONS,
+                        value="全部题型",
+                        label="题型筛选",
+                    )
                     week = gr.Textbox(
                         label="周次",
                         placeholder="例如: 12（可选）",
@@ -263,7 +352,7 @@ def build_ui():
 
             btn_gen.click(
                 fn=on_generate,
-                inputs=[week, units],
+                inputs=[week, units, section_type],
                 outputs=[preview, file_dl],
             )
 
@@ -271,26 +360,48 @@ def build_ui():
         with gr.Tab("题库管理"):
             with gr.Row():
                 btn_stats = gr.Button("刷新统计", variant="secondary")
-                btn_update = gr.Button("更新题库（自动生成+网络抓取）", variant="primary")
-                btn_reload = gr.Button("重置导入种子数据", variant="stop")
+                btn_update = gr.Button("更新题库（算法生成+网络抓取+本地导入）",
+                                       variant="primary")
+                btn_reload = gr.Button("重置种子数据", variant="stop")
 
             stats_text = gr.Markdown("点击「刷新统计」查看题库状态")
 
             stats_table = gr.Dataframe(
-                headers=["题型", "难度1", "难度2", "难度3", "难度4", "难度5", "小计"],
-                label="题型 × 难度分布",
+                headers=[
+                    "题型", "难度1", "难度2", "难度3", "难度4", "难度5",
+                    "总题数", "已使用", "可用",
+                ],
+                label="题型 x 难度分布（含最近4周使用标记）",
                 interactive=False,
             )
+
+            usage_label = gr.Markdown("")
 
             msg = gr.Textbox(label="操作结果", interactive=False)
 
             btn_stats.click(
                 fn=on_refresh_stats,
                 inputs=[],
-                outputs=[stats_text, stats_table],
+                outputs=[stats_text, stats_table, usage_label],
             )
             btn_update.click(fn=on_update_bank, inputs=[], outputs=[msg])
             btn_reload.click(fn=on_reload_seed, inputs=[], outputs=[msg])
+
+            # 单独抓取 URL
+            gr.Markdown("---\n**从指定网页抓取题目**")
+            with gr.Row():
+                scrape_url_input = gr.Textbox(
+                    label="网页 URL",
+                    placeholder="粘贴 51test.net 或其他教育网站的题目页面 URL",
+                    scale=3,
+                )
+                btn_scrape = gr.Button("抓取", variant="secondary", scale=1)
+            scrape_msg = gr.Textbox(label="抓取结果", interactive=False)
+            btn_scrape.click(
+                fn=on_scrape_url,
+                inputs=[scrape_url_input],
+                outputs=[scrape_msg],
+            )
 
         # ===== Tab 3: 系统设置 =====
         with gr.Tab("系统设置"):

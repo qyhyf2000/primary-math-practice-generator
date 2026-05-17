@@ -21,27 +21,23 @@ class QuestionPicker:
         difficulty_range: Tuple[int, int],
         exclude_ids: Optional[List[int]] = None,
         unit_filter: Optional[List[int]] = None,
+        tag_filter: Optional[str] = None,
     ) -> List[Question]:
         """
         从指定题型中按难度分层随机抽取题目。
-
-        策略：
-        - 40% 从难度下半区抽取（低难度）
-        - 40% 从难度上半区抽取（高难度）
-        - 20% 从全范围弹性抽取
-        - 不足时从全范围补足
+        tag_filter: 按标签过滤（如 "图形"）
         """
         exclude_ids = exclude_ids or []
         lo, hi = difficulty_range
 
         if hi <= lo:
-            # 单难度等级，直接随机抽取
             qs = self.db.get_questions(
                 section=section_id,
                 difficulty_min=lo, difficulty_max=hi,
                 limit=count + len(exclude_ids),
                 exclude_ids=exclude_ids,
                 unit_filter=unit_filter,
+                tag_filter=tag_filter,
             )
             if len(qs) < count:
                 raise NotEnoughQuestionsError(
@@ -59,31 +55,27 @@ class QuestionPicker:
         picked_ids = set()
         results = []
 
-        # 低难度池
         low_qs = self._pick_from_range(
-            section_id, (lo, mid), low_count, exclude_ids, unit_filter
+            section_id, (lo, mid), low_count, exclude_ids, unit_filter, tag_filter
         )
         self._add_unique(results, low_qs, picked_ids)
 
-        # 高难度池
         high_qs = self._pick_from_range(
-            section_id, (mid + 1, hi), high_count, exclude_ids, unit_filter
+            section_id, (mid + 1, hi), high_count, exclude_ids, unit_filter, tag_filter
         )
         self._add_unique(results, high_qs, picked_ids)
 
-        # 弹性池
         flex_qs = self._pick_from_range(
             section_id, (lo, hi), flex_count,
-            exclude_ids + [q.id for q in results if q.id], unit_filter
+            exclude_ids + [q.id for q in results if q.id], unit_filter, tag_filter
         )
         self._add_unique(results, flex_qs, picked_ids)
 
-        # 不足则从全范围补足
         if len(results) < count:
             remaining = count - len(results)
             all_exclude = exclude_ids + [q.id for q in results if q.id]
             more_qs = self._pick_from_range(
-                section_id, (lo, hi), remaining, all_exclude, unit_filter
+                section_id, (lo, hi), remaining, all_exclude, unit_filter, tag_filter
             )
             self._add_unique(results, more_qs, picked_ids)
 
@@ -94,6 +86,7 @@ class QuestionPicker:
         self, section: str, diff_range: Tuple[int, int],
         limit: int, exclude_ids: List[int],
         unit_filter: Optional[List[int]] = None,
+        tag_filter: Optional[str] = None,
     ) -> List[Question]:
         lo, hi = diff_range
         return self.db.get_questions(
@@ -102,6 +95,7 @@ class QuestionPicker:
             limit=max(limit, 1) + len(exclude_ids),
             exclude_ids=exclude_ids,
             unit_filter=unit_filter,
+            tag_filter=tag_filter,
         )
 
     @staticmethod

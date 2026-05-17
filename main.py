@@ -28,11 +28,23 @@ from src.generator.exam_builder import ExamBuilder
 from src.renderer.docx_renderer import DocxRenderer
 
 
+TYPE_MAP = {
+    "口算题": "oral_calc",
+    "填空题": "fill_blank",
+    "选择题": "choice",
+    "竖式": "vertical_calc",
+    "脱式": "vertical_calc",
+    "竖式/脱式计算": "vertical_calc",
+    "解决问题": "word_problem",
+    "应用题": "word_problem",
+    "图形题": "图形",
+}
+
+
 def cmd_generate(args, config: ConfigManager):
     """生成一份试卷"""
     db = DBManager(config.get_db_path())
 
-    # 首次使用自动导入种子数据
     if db.is_empty() and config.get_seed_on_empty():
         print("题库为空，正在导入内置种子数据...")
         seed_qs = get_all_seed_questions()
@@ -40,18 +52,32 @@ def cmd_generate(args, config: ConfigManager):
         total, _ = db.get_question_count()
         print(f"已导入 {total} 道种子题目")
 
-    # 解析单元过滤
+    # 单元过滤
     unit_filter = None
     if args.units:
         unit_filter = [int(u.strip()) for u in args.units.split(",")]
 
-    # 构建试卷
-    builder = ExamBuilder(config, db)
-    exam = builder.build_exam(week_label=args.week or "", unit_filter=unit_filter)
+    # 题型过滤
+    section_filter = None
+    tag_filter = None
+    if args.type:
+        t = args.type.strip()
+        if t == "图形" or t == "图形题":
+            tag_filter = "图形"
+        elif t in TYPE_MAP:
+            section_filter = [TYPE_MAP[t]]
 
-    # 渲染输出
+    builder = ExamBuilder(config, db)
+    exam = builder.build_exam(
+        week_label=args.week or "",
+        unit_filter=unit_filter,
+        section_filter=section_filter,
+        tag_filter=tag_filter,
+    )
+
     renderer = DocxRenderer(config)
-    output_name = args.output or f"{config.grade_name}{config.grade_term}_周末练习卷"
+    type_tag = f"_{args.type}" if args.type else ""
+    output_name = args.output or f"{config.grade_name}{config.grade_term}_周末练习卷{type_tag}"
     if args.week:
         output_name += f"_第{args.week}周"
     output_name += f"_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
@@ -152,7 +178,8 @@ def main():
     # generate
     gen = subparsers.add_parser("generate", help="生成试卷")
     gen.add_argument("--week", type=str, default="", help="周次标签")
-    gen.add_argument("--units", type=str, default="", help="限定单元，逗号分隔")
+    gen.add_argument("--units", type=str, default="", help="限定单元，逗号分隔（如 1,2,5）")
+    gen.add_argument("--type", type=str, default="", help="限定题型（口算题/填空题/选择题/竖式/解决问题/图形题）")
     gen.add_argument("--output", type=str, default="", help="自定义输出文件名（不含扩展名）")
 
     # status

@@ -344,4 +344,386 @@ def get_all_seed_questions() -> list:
             knowledge_point=item["kp"], tags=item.get("tags", ""),
         ))
 
+    # ============================================================
+    # 六、图形题 (graphics) — 约20题，用表格+Unicode渲染几何图形
+    # ============================================================
+
+    gfx = []
+
+    # --- 角的识别 ---
+    gfx.extend([
+        {"unit": 6, "diff": 1, "section": "fill_blank",
+         "content": "用三角尺比一比，下面的角各是什么角？",
+         "answer": "钝角；锐角；直角",
+         "kp": "角的分类",
+         "tags": "图形,角识别",
+         "graphic": {
+             "type": "angle_identify",
+             "angles": [
+                 {"symbol": "╲", "label": "第1个"},
+                 {"symbol": "∠", "label": "第2个"},
+                 {"symbol": "┌", "label": "第3个"},
+             ]
+         }},
+        {"unit": 6, "diff": 1, "section": "fill_blank",
+         "content": "下面的图形中，哪些是角？在括号里打√，不是的打×。",
+         "answer": "√；×；√；×",
+         "kp": "角的认识",
+         "tags": "图形,角识别",
+         "graphic": {
+             "type": "angle_judge",
+             "shapes": [
+                 {"symbol": "∠", "label": "①"},
+                 {"symbol": "┐┌", "label": "②"},
+                 {"symbol": "∟", "label": "③"},
+                 {"symbol": "╱", "label": "④"},
+             ]
+         }},
+        {"unit": 6, "diff": 2, "section": "fill_blank",
+         "content": "下面各有几个角？填在括号里。",
+         "answer": "3；4；5；6",
+         "kp": "数角",
+         "tags": "图形,数角",
+         "graphic": {
+             "type": "count_angles",
+             "shapes": [
+                 {"symbol": "△", "label": "三角形"},
+                 {"symbol": "□", "label": "正方形"},
+                 {"symbol": "⬠", "label": "五边形"},
+                 {"symbol": "⬡", "label": "六边形"},
+             ]
+         }},
+    ])
+
+    # --- 直角/锐角/钝角 ---
+    gfx.extend([
+        {"unit": 6, "diff": 2, "section": "choice",
+         "content": "下图中有几个直角？",
+         "answer": "B",
+         "kp": "数直角",
+         "tags": "图形,直角",
+         "options": '["A. 2个", "B. 4个", "C. 6个", "D. 8个"]',
+         "graphic": {
+             "type": "grid_count",
+             "rows": 2, "cols": 2,
+             "description": "长方形被分成4个小长方形"
+         }},
+        {"unit": 6, "diff": 2, "section": "fill_blank",
+         "content": "三角尺上有（    ）个角，其中有（    ）个直角。",
+         "answer": "3；1",
+         "kp": "直角认识",
+         "tags": "图形,三角尺"},
+        {"unit": 6, "diff": 3, "section": "choice",
+         "content": "把一个长方形剪去一个角，剩下的图形不可能有几个角？",
+         "answer": "C",
+         "kp": "图形探究",
+         "tags": "图形,剪角",
+         "options": '["A. 3个", "B. 4个", "C. 2个", "D. 5个"]'},
+    ])
+
+    # --- 长方形/正方形 ---
+    gfx.extend([
+        {"unit": 6, "diff": 2, "section": "fill_blank",
+         "content": "下图中有几个长方形？",
+         "answer": "9",
+         "kp": "数长方形",
+         "tags": "图形,数长方形",
+         "graphic": {
+             "type": "grid_count",
+             "rows": 2, "cols": 3,
+             "description": "2行×3列的方格，共有多少个长方形"
+         }},
+        {"unit": 6, "diff": 3, "section": "fill_blank",
+         "content": "数一数，下图中有（    ）个长方形，（    ）个正方形，（    ）个平行四边形。",
+         "answer": "5；2；2",
+         "kp": "数图形",
+         "tags": "图形,综合计数",
+         "graphic": {
+             "type": "grid_count",
+             "rows": 2, "cols": 2,
+             "description": "2×2正方形网格，标注边长相等"
+         }},
+        {"unit": 6, "diff": 2, "section": "choice",
+         "content": "下面图形中，四个角都是直角的是（    ）。",
+         "answer": "C",
+         "kp": "直角特征",
+         "tags": "图形,直角判断",
+         "options": '["A. 平行四边形", "B. 梯形", "C. 长方形", "D. 菱形"]'},
+    ])
+
+    # --- 平行四边形 ---
+    gfx.extend([
+        {"unit": 6, "diff": 2, "section": "fill_blank",
+         "content": "平行四边形有（    ）条边，对边（    ），它容易（    ）。",
+         "answer": "4；相等；变形",
+         "kp": "平行四边形特征",
+         "tags": "图形,平行四边形"},
+        {"unit": 6, "diff": 3, "section": "choice",
+         "content": "拉一拉长方形木框，变成平行四边形后，什么变了？什么没变？",
+         "answer": "C",
+         "kp": "平行四边形特性",
+         "tags": "图形,变形",
+         "options": '["A. 边长变了", "B. 角没变", "C. 形状变了，边长没变", "D. 都变了"]'},
+        {"unit": 6, "diff": 3, "section": "fill_blank",
+         "content": "七巧板中，有（    ）种不同的图形，分别是（                            ）。",
+         "answer": "3；三角形、正方形、平行四边形",
+         "kp": "七巧板",
+         "tags": "图形,七巧板"},
+    ])
+
+    # --- 图形拼组 ---
+    gfx.extend([
+        {"unit": 6, "diff": 3, "section": "fill_blank",
+         "content": "两个完全一样的三角形可以拼成一个（                ）。",
+         "answer": "平行四边形",
+         "kp": "图形拼组",
+         "tags": "图形,拼组"},
+        {"unit": 6, "diff": 4, "section": "word_problem",
+         "content": "一个长方形长 8 cm、宽 5 cm，在它里面画一个最大的正方形。这个正方形的边长是多少厘米？剩下的部分是什么图形？",
+         "answer": "5cm；长方形（长5cm宽3cm）",
+         "kp": "图形综合",
+         "tags": "图形,最大正方形"},
+        {"unit": 6, "diff": 3, "section": "fill_blank",
+         "content": "最少用（    ）个相同的小正方形可以拼成一个大正方形。",
+         "answer": "4",
+         "kp": "图形拼组",
+         "tags": "图形,拼正方形"},
+    ])
+
+    # --- 画图操作题 ---
+    gfx.extend([
+        {"unit": 6, "diff": 2, "section": "fill_blank",
+         "content": "在方格纸上画一个长方形和一个正方形。",
+         "answer": "（略）",
+         "kp": "画图形",
+         "tags": "图形,画图",
+         "graphic": {
+             "type": "draw_grid",
+             "rows": 4, "cols": 8,
+             "description": "4×8的方格纸，供画图使用"
+         }},
+        {"unit": 6, "diff": 3, "section": "fill_blank",
+         "content": "画一个比直角小的角。",
+         "answer": "（略）",
+         "kp": "画角",
+         "tags": "图形,画角",
+         "graphic": {
+             "type": "draw_angle",
+         }},
+    ])
+
+    # --- 观察物体 ---
+    gfx.extend([
+        {"unit": 6, "diff": 2, "section": "choice",
+         "content": "从不同方向观察一个长方体，最多能看到（    ）个面。",
+         "answer": "C",
+         "kp": "观察物体",
+         "tags": "图形,观察",
+         "options": '["A. 2个", "B. 4个", "C. 3个", "D. 1个"]'},
+        {"unit": 6, "diff": 3, "section": "fill_blank",
+         "content": "用 4 个相同的小正方体可以拼成（    ）种不同的长方体。",
+         "answer": "2",
+         "kp": "立体拼组",
+         "tags": "图形,拼组"},
+    ])
+
+    # --- 钟面读时 ---
+    gfx.extend([
+        {"unit": 7, "diff": 1, "section": "fill_blank",
+         "content": "写出下面钟面上的时间。",
+         "answer": "3:00；7:30；11:15；5:45",
+         "kp": "读钟面",
+         "tags": "图形,钟面,时钟",
+         "graphic": {
+             "type": "clock",
+             "clocks": [
+                 {"hour": 3, "minute": 0},
+                 {"hour": 7, "minute": 30},
+                 {"hour": 11, "minute": 15},
+                 {"hour": 5, "minute": 45},
+             ]
+         }},
+        {"unit": 7, "diff": 2, "section": "fill_blank",
+         "content": "看图写出钟面上的时间，再算一算经过了多少时间。",
+         "answer": "8:00→8:30→9:00；经过30分；经过30分",
+         "kp": "经过时间",
+         "tags": "图形,钟面,经过时间",
+         "graphic": {
+             "type": "clock",
+             "clocks": [
+                 {"hour": 8, "minute": 0},
+                 {"hour": 8, "minute": 30},
+                 {"hour": 9, "minute": 0},
+             ]
+         }},
+        {"unit": 7, "diff": 2, "section": "fill_blank",
+         "content": "根据时间画出时针和分针。",
+         "answer": "（略）",
+         "kp": "画钟面",
+         "tags": "图形,钟面,画时针分针",
+         "graphic": {
+             "type": "clock_time",
+             "times": [
+                 {"time": "4:00", "label": "4时"},
+                 {"time": "10:30", "label": "10时30分"},
+                 {"time": "6:15", "label": "6时15分"},
+             ]
+         }},
+    ])
+
+    # --- 立方体堆叠 ---
+    gfx.extend([
+        {"unit": 6, "diff": 2, "section": "fill_blank",
+         "content": "数一数，下面的图形由几个小立方体搭成？",
+         "answer": "6",
+         "kp": "数立方体",
+         "tags": "图形,立方体,堆叠",
+         "graphic": {
+             "type": "cube_stack",
+             "grid": [[2, 1], [2, 1]],
+         }},
+        {"unit": 6, "diff": 3, "section": "fill_blank",
+         "content": "数一数，下面这堆积木一共有多少个？",
+         "answer": "9",
+         "kp": "数立方体",
+         "tags": "图形,立方体,堆叠",
+         "graphic": {
+             "type": "cube_stack",
+             "grid": [[3, 2, 1], [1, 1, 0], [1, 0, 0]],
+         }},
+        {"unit": 6, "diff": 3, "section": "fill_blank",
+         "content": "下面是用小正方体搭成的立体图形。请根据从不同方向看到的形状填空。",
+         "answer": "7",
+         "kp": "三视图",
+         "tags": "图形,立方体,三视图",
+         "graphic": {
+             "type": "cube_view",
+             "front": [3, 2, 1],
+             "side": [2, 1, 1],
+         }},
+        {"unit": 6, "diff": 4, "section": "word_problem",
+         "content": "用一些小正方体搭成一个长方体。从正面看是3层2列，从侧面看是2层3列。最少需要几个小正方体？",
+         "answer": "最少18个（3×2×3）",
+         "kp": "三视图推理",
+         "tags": "图形,立方体,三视图推理"},
+    ])
+
+    # --- 图形分类 (shape_classify) ---
+    gfx.extend([
+        {"unit": 6, "diff": 1, "section": "fill_blank",
+         "content": "写出下面图形的名称。",
+         "answer": "长方形；正方形；平行四边形；三角形",
+         "kp": "图形识别",
+         "tags": "图形,图形分类",
+         "graphic": {
+             "type": "shape_classify",
+             "shapes": [
+                 {"symbol": "▭", "label": ""},
+                 {"symbol": "□", "label": ""},
+                 {"symbol": "▱", "label": ""},
+                 {"symbol": "△", "label": ""},
+             ]
+         }},
+        {"unit": 6, "diff": 2, "section": "fill_blank",
+         "content": "下面哪些图形是平行四边形？在括号里打√，不是的打×。",
+         "answer": "×；√；×；√",
+         "kp": "平行四边形识别",
+         "tags": "图形,图形分类",
+         "graphic": {
+             "type": "shape_classify",
+             "shapes": [
+                 {"symbol": "□", "label": "①"},
+                 {"symbol": "▱", "label": "②"},
+                 {"symbol": "▭", "label": "③"},
+                 {"symbol": "▱", "label": "④"},
+             ]
+         }},
+        {"unit": 6, "diff": 2, "section": "choice",
+         "content": "下面哪个图形不是四边形？",
+         "answer": "C",
+         "kp": "四边形识别",
+         "tags": "图形,图形分类,四边形",
+         "options": '["A. 长方形", "B. 平行四边形", "C. 三角形", "D. 正方形"]'},
+    ])
+
+    # --- 七巧板 (tangram) ---
+    gfx.extend([
+        {"unit": 6, "diff": 2, "section": "fill_blank",
+         "content": "下面是用七巧板拼出的小房子。数一数，每种颜色的图形分别是什么形状？",
+         "answer": "红色三角形；蓝色正方形；绿色平行四边形",
+         "kp": "七巧板认识",
+         "tags": "图形,七巧板,分类",
+         "graphic": {
+             "type": "tangram",
+             "pieces": [
+                 ["大三角形", "r"], ["大三角形", "r"],
+                 ["中三角形", "b"], ["小三角形", "g"],
+                 ["小三角形", "g"], ["正方形", "y"],
+                 ["平行四边形", "p"],
+             ],
+             "grid": [
+                 [0,   0,   0,   "r", "r", 0,   0],
+                 [0,   0,   "b", "b", "b", 0,   0],
+                 [0,   "g", "g", "y", "y", "r", "r"],
+                 [0,   "g", "p", "p", "y", "y", 0],
+                 ["g", "g", "p", "p", 0,   0,   0],
+             ]
+         }},
+        {"unit": 6, "diff": 3, "section": "fill_blank",
+         "content": "用一副七巧板拼一拼。两个完全一样的三角形可以拼成什么图形？写出三种可能。",
+         "answer": "正方形；平行四边形；大三角形",
+         "kp": "七巧板拼组",
+         "tags": "图形,七巧板,拼组"},
+        {"unit": 6, "diff": 3, "section": "choice",
+         "content": "七巧板中，共有几块三角形？",
+         "answer": "B",
+         "kp": "七巧板组成",
+         "tags": "图形,七巧板",
+         "options": '["A. 3块", "B. 5块", "C. 7块", "D. 4块"]'},
+    ])
+
+    # --- 平行四边形变形 + 拼组 ---
+    gfx.extend([
+        {"unit": 6, "diff": 2, "section": "fill_blank",
+         "content": "看一看，长方形拉成平行四边形后，什么变了？什么没变？",
+         "answer": "形状变了（角变了），边长没变",
+         "kp": "平行四边形特性",
+         "tags": "图形,平行四边形,变形",
+         "graphic": {
+             "type": "parallelogram",
+         }},
+        {"unit": 6, "diff": 2, "section": "fill_blank",
+         "content": "两个完全一样的直角三角形可以拼成一个（                ）形。",
+         "answer": "长方形",
+         "kp": "图形拼组",
+         "tags": "图形,拼组,直角三角形"},
+        {"unit": 6, "diff": 3, "section": "word_problem",
+         "content": "一张长方形纸长10cm、宽6cm。小明沿对角线剪开，得到两个完全一样的三角形。每个三角形的三个角分别是什么角？",
+         "answer": "1个直角、1个锐角、1个锐角（或锐角、钝角看具体情况）",
+         "kp": "剪拼探究",
+         "tags": "图形,剪拼,探究"},
+        {"unit": 6, "diff": 3, "section": "fill_blank",
+         "content": "至少用（    ）个完全相同的小正方形可以拼成一个大正方形；至少用（    ）个完全相同的小正方体可以拼成一个大正方体。",
+         "answer": "4；8",
+         "kp": "拼组规律",
+         "tags": "图形,拼组,规律"},
+    ])
+
+    for item in gfx:
+        q = Question(
+            unit=item["unit"],
+            section=item.get("section", "fill_blank"),
+            difficulty=item["diff"],
+            content=item["content"],
+            answer=item["answer"],
+            options=item.get("options", ""),
+            knowledge_point=item["kp"],
+            tags=item.get("tags", ""),
+        )
+        # 图形题在 content 中包含渲染提示（以 JSON 形式存储在 tags 中）
+        if "graphic" in item:
+            import json
+            q.tags = item["tags"] + ",graphic:" + json.dumps(item["graphic"], ensure_ascii=False)
+        questions.append(q)
+
     return questions

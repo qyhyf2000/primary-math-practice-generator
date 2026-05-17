@@ -66,9 +66,16 @@ question_bank:
     generator_enabled: true
     generator_count: 30
 
-    # 2. 网络抓取：免费题库站 URL（可选，为空则跳过抓取）
-    #    支持 JSON API 或简单 HTML 页面
+    # 2. 网络抓取：无忧考网等免费题库站
+    #    use_builtin_urls: 是否使用内置的已知页面
+    use_builtin_urls: true
+    #    单独指定抓取 URL（可选）
     scraper_url: ""
+    #    批量 URL 列表（可选）
+    scraper_urls:
+      - "https://www.51test.net/show/2968915.html"
+      - "https://www.51test.net/show/11231919.html"
+      - "https://www.51test.net/show/9699960.html"
 
     # 3. 远程 API（可选，需要第三方服务）
     url: ""

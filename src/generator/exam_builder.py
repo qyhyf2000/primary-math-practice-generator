@@ -16,15 +16,18 @@ class ExamBuilder:
         self,
         week_label: str = "",
         unit_filter: Optional[List[int]] = None,
+        section_filter: Optional[List[str]] = None,
+        tag_filter: Optional[str] = None,
     ) -> Exam:
         """
-        构建一份完整试卷。
+        构建一份试卷。
 
         参数：
-            week_label: 周次标签（用于标题和排重记录）
-            unit_filter: 限定单元列表（如 [1,2,5]），None=全范围
+            week_label: 周次标签
+            unit_filter: 限定单元（如 [1,2,5]），None=全范围
+            section_filter: 限定题型（如 ["oral_calc", "word_problem"]），None=全部
+            tag_filter: 按标签过滤（如 "图形"），跨题型搜索
         """
-        # 获取排重列表
         dedup_weeks = self.config.get_dedup_window_weeks()
         exclude_ids = self.db.get_recently_used_ids(weeks=dedup_weeks)
 
@@ -33,6 +36,11 @@ class ExamBuilder:
 
         for section_cfg in self.config.get_sections():
             section_id = section_cfg["id"]
+
+            # 题型过滤：跳过不在 filter 中的 section
+            if section_filter and section_id not in section_filter:
+                continue
+
             count = section_cfg["count"]
             diff_range = tuple(section_cfg["difficulty_range"])
 
@@ -43,26 +51,26 @@ class ExamBuilder:
                     difficulty_range=diff_range,
                     exclude_ids=exclude_ids,
                     unit_filter=unit_filter,
+                    tag_filter=tag_filter,
                 )
-            except NotEnoughQuestionsError as e:
-                # 混入已用过的题目放宽限制
+            except NotEnoughQuestionsError:
                 questions = self.picker.pick_for_section(
                     section_id=section_id,
                     count=count,
                     difficulty_range=diff_range,
                     exclude_ids=[],
                     unit_filter=unit_filter,
+                    tag_filter=tag_filter,
                 )
 
-            section = ExamSection(
-                title=section_cfg["title"],
-                score_per_question=section_cfg["score_per_question"],
-                section_id=section_id,
-                questions=questions,
-            )
-            exam.sections.append(section)
+            if questions:
+                section = ExamSection(
+                    title=section_cfg["title"],
+                    score_per_question=section_cfg["score_per_question"],
+                    section_id=section_id,
+                    questions=questions,
+                )
+                exam.sections.append(section)
 
-        # 记录本次使用的题目
         self.db.record_exam(exam.title, exam.all_question_ids())
-
         return exam
