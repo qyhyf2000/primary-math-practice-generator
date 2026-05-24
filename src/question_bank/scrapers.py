@@ -401,20 +401,70 @@ def _is_valid_math_question(text: str) -> bool:
     return False
 
 
+# 答案/解析污染模式
+_ANSWER_PATTERNS = [
+    re.compile(r'[【\[]答案[】\]].*', re.DOTALL),
+    re.compile(r'[【\[]解答[】\]].*', re.DOTALL),
+    re.compile(r'[【\[]解析[】\]].*', re.DOTALL),
+    re.compile(r'[【\[]分析[】\]].*', re.DOTALL),
+    re.compile(r'[【\[]来源[】\]].*', re.DOTALL),
+    re.compile(r'[【\[]考点[】\]].*', re.DOTALL),
+    re.compile(r'[【\[]详解[】\]].*', re.DOTALL),
+    re.compile(r'[【\[]参考答案[】\]].*', re.DOTALL),
+    re.compile(r'参考[答案解答]：.*', re.DOTALL),
+    re.compile(r'答案[：:].*', re.DOTALL),
+    re.compile(r'解[：:][\s\S]*', re.DOTALL),
+    re.compile(r'分析[：:][\s\S]*', re.DOTALL),
+    re.compile(r'(?:答案与解析|答案和解析)[\s\S]*', re.DOTALL),
+]
+
+# 非题目内容黑名单
+_IMPURITY_KEYWORDS = [
+    "参考答案", "答案与解析", "试题分析", "考点分析",
+    "解题思路", "方法点拨", "题目解析", "答案解析",
+    "篇十", "篇十一", "篇十二", "篇十三", "篇十四", "篇十五",
+    "北师大版", "小学数学", "练习题及答案", "单元测试",
+    "一、填空", "二、选择", "三、判断", "四、计算", "五、应用",
+]
+
+
+def _strip_answer_content(text: str) -> str:
+    """移除答案、解析等非题目内容"""
+    for pat in _ANSWER_PATTERNS:
+        text = pat.sub('', text)
+    return text.strip()
+
+
+def _has_impurity(text: str) -> bool:
+    """检测是否含非题目杂质"""
+    # 含多个题号标记（如 "1. ... 2. ..."）→ 未正确拆分
+    if len(re.findall(r'\d+[\.\、．）\)]\s*[A-Z一-鿿]', text)) > 1:
+        return True
+    # 含杂质关键词
+    for kw in _IMPURITY_KEYWORDS:
+        if kw in text:
+            return True
+    # 含大量 HTML 实体
+    if text.count("&") >= 3:
+        return True
+    # 超长内容多半混了答案
+    if len(text) > 200:
+        return True
+    # 含连续下划线（非填空，是HTML残留）
+    if "________" in text or "_______" in text:
+        return True
+    return False
+
+
 def _classify_and_create(text: str, source_url: str = "",
                          extracted_answer: str = "") -> Optional[Dict]:
     """分类一行文本并创建题目字典"""
-    text = text.strip()
-    if len(text) < 3:
+    text = _strip_answer_content(text.strip())
+    if len(text) < 3 or len(text) > 200:
         return None
 
-    # 提前剥离【答案】...块，否则会污染黑名单判断
-    text = re.sub(r'[【\[]答案[】\]].*?(?=[【\[]\s*(?:答案|解析|来源|考点|详解|参考答案|答案与)|$)', '', text, flags=re.DOTALL)
-    text = re.sub(r'[【\[]解析[】\]].*?(?=[【\[]\s*(?:答案|解析|来源|考点|详解|参考答案|答案与)|$)', '', text, flags=re.DOTALL)
-    text = re.sub(r'[【\[]来源[】\]].*?(?=[【\[]\s*(?:答案|解析|来源|考点|详解|参考答案|答案与)|$)', '', text, flags=re.DOTALL)
-    text = re.sub(r'[【\[]考点[】\]].*?(?=[【\[]\s*(?:答案|解析|来源|考点|详解|参考答案|答案与)|$)', '', text, flags=re.DOTALL)
-    text = re.sub(r'[【\[]参考答案[】\]].*?(?=[【\[]\s*(?:答案|解析|来源|考点|详解|参考答案|答案与)|$)', '', text, flags=re.DOTALL)
-    text = text.strip()
+    if _has_impurity(text):
+        return None
 
     if not _is_valid_math_question(text):
         return None
