@@ -35,6 +35,19 @@ class ExamBuilder:
             grade: 年级 1-6
             term: 学期 1=上, 2=下
         """
+        # 检查当前年级/学期题目是否足够，不足则按题型分别自动生成
+        grade_count = self.db.conn.execute(
+            "SELECT COUNT(*) FROM questions WHERE grade=? AND term=?",
+            (grade, term)
+        ).fetchone()[0]
+        if grade_count < 30:
+            from ..question_bank.question_generator import generate_questions as gen_qs
+            for sec in ["oral_calc", "fill_blank", "choice", "vertical_calc", "word_problem"]:
+                new_qs = gen_qs(count=40, sections=[sec], grade=grade, term=term)
+                if new_qs:
+                    self.db.insert_batch(new_qs)
+            logger.info(f"自动生成补充 G{grade}T{term} 题库（原{grade_count}题）")
+
         title = self.config.exam_title(week_label)
         exam = Exam(title=title)
 

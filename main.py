@@ -53,19 +53,6 @@ def cmd_generate(args, config: ConfigManager):
             total, _ = db.get_question_count()
             print(f"已导入 {total} 道种子题目")
 
-        # 检查当前年级/学期是否有足够的题目
-        grade_count = db.conn.execute(
-            "SELECT COUNT(*) FROM questions WHERE grade=? AND term=?",
-            (args.grade, args.term)
-        ).fetchone()[0]
-
-        if grade_count < 20:
-            print(f"当前年级({args.grade}-{args.term})题库仅{grade_count}题，自动生成补充...")
-            from src.question_bank.question_generator import generate_questions as gen_qs
-            new_qs = gen_qs(count=100, grade=args.grade, term=args.term)
-            added = db.insert_batch(new_qs)
-            print(f"已自动生成 {added} 题补充题库")
-
         # 单元过滤
         unit_filter = None
         if args.units:

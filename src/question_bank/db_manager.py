@@ -302,6 +302,10 @@ class DBManager:
     def reset(self):
         # 先删子表（有外键），再删主表
         self.conn.execute("DELETE FROM exam_history")
+        try:
+            self.conn.execute("DELETE FROM wrong_answers")
+        except sqlite3.OperationalError:
+            pass  # 表可能尚未创建
         self.conn.execute("DELETE FROM questions")
         self.conn.commit()
 
