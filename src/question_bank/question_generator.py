@@ -1792,7 +1792,7 @@ def _movie_params():
 
 
 def _gen_word_problem() -> Question:
-    """从模板生成应用题（每个模板自包含所有计算值）"""
+    """从模板生成应用题（二年级水平模板）"""
     tmpl = random.choice(WORD_PROBLEM_TEMPLATES)
     params = tmpl["gen_params"]()
     content = tmpl["content"].format(**params)
@@ -1803,6 +1803,119 @@ def _gen_word_problem() -> Question:
         knowledge_point=tmpl["kp"], tags=tmpl.get("tags", ""),
         source="generated",
     )
+
+
+# -- 高年级应用题模板 --
+
+def _gen_word_problem_mid() -> Question:
+    """三四年级应用题：多步运算、周长面积、行程购物"""
+    templates = [
+        {
+            "content": "一个长方形花坛长 {a} 米，宽 {b} 米。沿花坛走一圈是多少米？面积是多少平方米？",
+            "answer": "周长{a_plus_b_x2}米，面积{area}平方米",
+            "gen": lambda: {"a": _rand(8, 25), "b": _rand(5, 15)},
+            "kp": "长方形周长面积",
+        },
+        {
+            "content": "学校买来 {n} 套桌椅，每套 {price} 元，一共花了多少元？",
+            "answer": "{total}元",
+            "gen": lambda: {"n": _rand(20, 80), "price": _rand(50, 200)},
+            "kp": "多位数乘法应用",
+        },
+        {
+            "content": "小明从家到学校 {dist} 米，每分钟走 {speed} 米。走了 {mins} 分钟后，离学校还有多少米？",
+            "answer": "{remain}米",
+            "gen": lambda: (d := _rand(800, 2000), s := _rand(50, 80), m := _rand(5, 10)),
+            "kp": "行程问题",
+        },
+        {
+            "content": "图书馆有科技书 {a} 本，故事书是科技书的 {b} 倍。两种书一共有多少本？",
+            "answer": "{total}本",
+            "gen": lambda: {"a": _rand(100, 500), "b": _rand(2, 5)},
+            "kp": "倍数问题",
+        },
+        {
+            "content": "一箱苹果重 {w} 千克，{n} 箱苹果一共重多少千克？合多少吨？",
+            "answer": "{total}千克，合{tons}吨",
+            "gen": lambda: {"w": _rand(15, 30), "n": _rand(40, 80)},
+            "kp": "质量单位换算",
+        },
+    ]
+    t = random.choice(templates)
+    p = t["gen"]()
+    if t["kp"] == "长方形周长面积":
+        a, b = p["a"], p["b"]
+        p["a_plus_b_x2"] = 2 * (a + b)
+        p["area"] = a * b
+    elif t["kp"] == "多位数乘法应用":
+        p["total"] = p["n"] * p["price"]
+    elif t["kp"] == "行程问题":
+        p["remain"] = p["dist"] - p["speed"] * p["mins"]
+    elif t["kp"] == "倍数问题":
+        p["total"] = p["a"] + p["a"] * p["b"]
+    elif t["kp"] == "质量单位换算":
+        p["total"] = p["w"] * p["n"]
+        p["tons"] = round(p["total"] / 1000, 2)
+    content = t["content"].format(**p)
+    answer = t["answer"].format(**p)
+    return Question(unit=1, section="word_problem", difficulty=3, content=content,
+                    answer=answer, knowledge_point=t["kp"], tags="应用题", source="generated")
+
+
+def _gen_word_problem_high() -> Question:
+    """五六年级应用题：分数、百分数、比和比例、几何"""
+    templates = [
+        {
+            "content": "一本书共 {total} 页，第一天看了全书的 1/{a}，第二天看了全书的 1/{b}。两天一共看了多少页？还剩多少页？",
+            "answer": "看了{pages_read}页，还剩{pages_left}页",
+            "gen": lambda: {"total": _rand(100, 300), "a": _rand(3, 5), "b": _rand(4, 8)},
+            "kp": "分数应用",
+        },
+        {
+            "content": "一件衣服原价 {price} 元，打 {discount} 折出售。现价是多少元？",
+            "answer": "{sale_price}元",
+            "gen": lambda: {"price": _rand(100, 500), "discount": _rand(6, 9)},
+            "kp": "折扣问题",
+        },
+        {
+            "content": "一个圆形花坛的直径是 {d} 米，它的周长约是多少米？面积约是多少平方米？（π取3.14）",
+            "answer": "周长{cir}米，面积{area}平方米",
+            "gen": lambda: {"d": _rand(6, 20)},
+            "kp": "圆的周长和面积",
+        },
+        {
+            "content": "配置一种盐水，盐和水的质量比是 1:{ratio}。要配置 {total} 克这样的盐水，需要盐多少克？水多少克？",
+            "answer": "盐{salt}克，水{water}克",
+            "gen": lambda: {"ratio": _rand(4, 10), "total": _rand(200, 1000)},
+            "kp": "按比分配",
+        },
+        {
+            "content": "一个圆柱形水桶底面半径 {r} 厘米，高 {h} 厘米。它的容积约是多少升？（π取3.14，1升=1000立方厘米）",
+            "answer": "{volume}升",
+            "gen": lambda: {"r": _rand(5, 15), "h": _rand(20, 50)},
+            "kp": "圆柱体积",
+        },
+    ]
+    t = random.choice(templates)
+    p = t["gen"]()
+    if t["kp"] == "分数应用":
+        p["pages_read"] = p["total"] // p["a"] + p["total"] // p["b"]
+        p["pages_left"] = p["total"] - p["pages_read"]
+    elif t["kp"] == "折扣问题":
+        p["sale_price"] = round(p["price"] * p["discount"] / 10, 1)
+    elif t["kp"] == "圆的周长和面积":
+        p["cir"] = round(3.14 * p["d"], 2)
+        p["area"] = round(3.14 * (p["d"] / 2) ** 2, 2)
+    elif t["kp"] == "按比分配":
+        unit = p["total"] / (1 + p["ratio"])
+        p["salt"] = round(unit, 1)
+        p["water"] = round(unit * p["ratio"], 1)
+    elif t["kp"] == "圆柱体积":
+        p["volume"] = round(3.14 * p["r"] ** 2 * p["h"] / 1000, 2)
+    content = t["content"].format(**p)
+    answer = t["answer"].format(**p)
+    return Question(unit=1, section="word_problem", difficulty=4, content=content,
+                    answer=answer, knowledge_point=t["kp"], tags="应用题", source="generated")
 
 
 # ============================================================
@@ -1919,9 +2032,13 @@ def _register_all():
               lambda p: p.geometry_cubes and p.supports_fractions)
     _register("fill_blank", _gen_fb_proportion,
               lambda p: p.supports_fractions and p.supports_decimals)
-    # -- 应用题：所有年级通用 --
+    # -- 应用题：按年级分段 --
     _register("word_problem", _gen_word_problem,
-              lambda p: True)
+              lambda p: p.grade <= 2)          # 一二年级：基础应用题
+    _register("word_problem", _gen_word_problem_mid,
+              lambda p: 3 <= p.grade <= 4)      # 三四年级：多步运算、周长面积
+    _register("word_problem", _gen_word_problem_high,
+              lambda p: p.grade >= 5)           # 五六年级：分数、百分数、几何
 
     # -- 口算题 --
     _register("oral_calc", _gen_oral_div_table,
