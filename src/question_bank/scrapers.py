@@ -749,6 +749,15 @@ def extract_template(text: str) -> Optional[Dict]:
     }
 
 
+def _safe_randint(lo: int, hi: int) -> int:
+    """安全随机整数，lo > hi 时自动交换或返回 lo"""
+    if lo > hi:
+        lo, hi = hi, lo
+    if lo == hi:
+        return lo
+    return random.randint(lo, hi)
+
+
 def generate_variation(template_info: Dict, grade: int = 2, term: int = 2) -> Optional[str]:
     """
     基于模板生成一个变形题（替换数字参数）。
@@ -762,18 +771,20 @@ def generate_variation(template_info: Dict, grade: int = 2, term: int = 2) -> Op
     params = template_info["params"]
 
     if grade <= 2:
-        new_params = {k: random.randint(1, min(20, v * 2))
+        new_params = {k: _safe_randint(1, max(1, min(20, v * 2)))
                       for k, v in params.items()}
     elif grade <= 4:
-        new_params = {k: random.randint(max(1, v // 2), min(999, v * 2))
+        new_params = {k: _safe_randint(max(1, v // 2), max(2, min(999, v * 2)))
                       for k, v in params.items()}
     else:
         new_params = {}
         for k, v in params.items():
+            lo = max(1, v // 2)
+            hi = max(2, min(9999, v * 2))
             if random.random() < 0.3:
-                new_params[k] = round(random.uniform(0.5, min(9999, v * 2)), 1)
+                new_params[k] = round(random.uniform(float(lo), float(hi)), 1)
             else:
-                new_params[k] = random.randint(max(1, v // 2), min(9999, v * 2))
+                new_params[k] = _safe_randint(lo, hi)
 
     try:
         return tpl.format(**new_params)
@@ -841,9 +852,12 @@ def learn_and_generate(url: str, grade: int = 2, term: int = 2,
             templates.append(tmpl)
 
     questions = []
-    for tmpl in templates[:20]:  # 最多取 20 个模板
+    for tmpl in templates[:20]:
         for _ in range(per_template):
-            content = generate_variation(tmpl, grade, term)
+            try:
+                content = generate_variation(tmpl, grade, term)
+            except Exception:
+                continue
             if content and _is_valid_math_question(content):
                 # 根据内容判断题型
                 section = "oral_calc"
