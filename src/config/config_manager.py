@@ -1,5 +1,4 @@
 """配置管理器 - 加载和验证 YAML 配置文件"""
-import os
 import yaml
 from pathlib import Path
 
@@ -7,9 +6,26 @@ from pathlib import Path
 class ConfigManager:
     def __init__(self, config_path: str = None):
         if config_path is None:
-            config_path = Path(__file__).parent.parent.parent / "config.yaml"
-        with open(config_path, "r", encoding="utf-8") as f:
-            self._data = yaml.safe_load(f)
+            self._project_root = Path(__file__).parent.parent.parent
+            config_path = self._project_root / "config.yaml"
+        else:
+            config_path = Path(config_path)
+            self._project_root = config_path.parent
+
+        try:
+            with open(config_path, "r", encoding="utf-8") as f:
+                self._data = yaml.safe_load(f)
+        except FileNotFoundError:
+            raise FileNotFoundError(
+                f"配置文件未找到: {config_path}\n"
+                f"请确保项目根目录下存在 config.yaml 文件"
+            )
+        except yaml.YAMLError as e:
+            raise ValueError(f"配置文件格式错误 ({config_path}):\n{e}")
+
+        if self._data is None:
+            raise ValueError(f"配置文件为空: {config_path}")
+
         self._validate()
 
     def _validate(self):
@@ -48,23 +64,23 @@ class ConfigManager:
     def textbook(self):
         return self._data["grade"]["textbook"]
 
+    def get_units(self) -> dict:
+        """返回单元映射 {序号: 名称}，从 config 动态加载"""
+        units_list = self._data["grade"].get("units", [])
+        return {i + 1: name for i, name in enumerate(units_list)}
+
     def get_sections(self):
         return self._data["exam"]["sections"]
 
     def get_db_path(self):
         db_rel = self._data["question_bank"]["db_path"]
-        return str(Path(__file__).parent.parent.parent / db_rel)
+        return str(self._project_root / db_rel)
 
     def get_output_dir(self):
-        output_dir = Path(__file__).parent.parent.parent / "output"
-        output_dir.mkdir(parents=True, exist_ok=True)
-        return str(output_dir)
+        return str(self._project_root / "output")
 
     def get_seed_on_empty(self):
         return self._data["question_bank"].get("seed_on_empty", True)
-
-    def get_dedup_window_weeks(self):
-        return self._data["question_bank"].get("dedup_window_weeks", 4)
 
     def get_sync_config(self):
         return self._data["question_bank"].get("sync", {})

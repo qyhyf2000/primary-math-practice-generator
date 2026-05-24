@@ -1,9 +1,12 @@
 """试卷组装器 - 协调选题和排重"""
+import logging
 from typing import List, Optional
 from ..config.config_manager import ConfigManager
 from ..question_bank.db_manager import DBManager
 from ..question_bank.models import Exam, ExamSection
-from .question_picker import QuestionPicker, NotEnoughQuestionsError
+from .question_picker import QuestionPicker
+
+logger = logging.getLogger(__name__)
 
 
 class ExamBuilder:
@@ -22,22 +25,21 @@ class ExamBuilder:
         """
         构建一份试卷。
 
+        选题采用使用次数分层机制：优先选从未用过的题，不够再选用过 1 次、
+        2 次……所有题最终都会循环复用。
+
         参数：
             week_label: 周次标签
             unit_filter: 限定单元（如 [1,2,5]），None=全范围
             section_filter: 限定题型（如 ["oral_calc", "word_problem"]），None=全部
             tag_filter: 按标签过滤（如 "图形"），跨题型搜索
         """
-        dedup_weeks = self.config.get_dedup_window_weeks()
-        exclude_ids = self.db.get_recently_used_ids(weeks=dedup_weeks)
-
         title = self.config.exam_title(week_label)
         exam = Exam(title=title)
 
         for section_cfg in self.config.get_sections():
             section_id = section_cfg["id"]
 
-            # 题型过滤：跳过不在 filter 中的 section
             if section_filter and section_id not in section_filter:
                 continue
 
@@ -49,19 +51,14 @@ class ExamBuilder:
                     section_id=section_id,
                     count=count,
                     difficulty_range=diff_range,
-                    exclude_ids=exclude_ids,
                     unit_filter=unit_filter,
                     tag_filter=tag_filter,
                 )
-            except NotEnoughQuestionsError:
-                questions = self.picker.pick_for_section(
-                    section_id=section_id,
-                    count=count,
-                    difficulty_range=diff_range,
-                    exclude_ids=[],
-                    unit_filter=unit_filter,
-                    tag_filter=tag_filter,
+            except Exception:
+                logger.warning(
+                    f"{section_id}: 选取题目失败，跳过此题型"
                 )
+                continue
 
             if questions:
                 section = ExamSection(

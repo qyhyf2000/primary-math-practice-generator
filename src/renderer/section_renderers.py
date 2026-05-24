@@ -37,14 +37,20 @@ def _parse_graphic_info(q) -> dict:
     if idx < 0:
         return None
     # 提取 graphic: 之后的所有内容作为 JSON
-    json_str = q.tags[idx + len("graphic:"):].strip()
-    # 找到 JSON 对象结束的 }
-    # 简单方法：从开头找匹配的大括号
-    if not json_str.startswith("{"):
+    candidate = q.tags[idx + len("graphic:"):].strip()
+    if not candidate.startswith("{"):
         return None
+
+    # 优先直接解析（graphic JSON 通常是 tags 末尾的内容）
+    try:
+        return json.loads(candidate)
+    except json.JSONDecodeError:
+        pass
+
+    # 回退：手动数大括号截取 JSON（兼容 tags 中 graphic 后有额外内容的情况）
     depth = 0
     end = 0
-    for i, ch in enumerate(json_str):
+    for i, ch in enumerate(candidate):
         if ch == "{":
             depth += 1
         elif ch == "}":
@@ -55,7 +61,7 @@ def _parse_graphic_info(q) -> dict:
     if end == 0:
         return None
     try:
-        return json.loads(json_str[:end])
+        return json.loads(candidate[:end])
     except json.JSONDecodeError:
         return None
 

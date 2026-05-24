@@ -5,12 +5,20 @@ from docx.oxml.ns import qn
 from docx.oxml import OxmlElement
 
 
+PAGE_SIZES = {
+    "A4": (21.0, 29.7),
+    "Letter": (21.59, 27.94),
+}
+
+
 def setup_page(doc, rendering_cfg):
-    """设置A4页面和页边距"""
+    """设置页面尺寸和页边距，支持 A4/Letter"""
     page = rendering_cfg["page"]
+    size_name = page.get("size", "A4")
+    width, height = PAGE_SIZES.get(size_name, PAGE_SIZES["A4"])
     section = doc.sections[0]
-    section.page_width = Cm(21.0)
-    section.page_height = Cm(29.7)
+    section.page_width = Cm(width)
+    section.page_height = Cm(height)
     section.top_margin = Cm(page["margin_top_cm"])
     section.bottom_margin = Cm(page["margin_bottom_cm"])
     section.left_margin = Cm(page["margin_left_cm"])

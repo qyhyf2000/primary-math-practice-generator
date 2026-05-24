@@ -26,37 +26,102 @@ FONT = "宋体"
 BODY_SIZE = 12
 
 
+def _draw_angle_image(angle_type: str, size: int = 120) -> BytesIO:
+    """
+    用 PIL 绘制单个角的图形。
+
+    angle_type: "直角" / "锐角" / "钝角"
+    size: 图片像素尺寸
+    """
+    import math as _math
+    img = Image.new('RGB', (size, size), 'white')
+    draw = ImageDraw.Draw(img)
+
+    cx, cy = size // 2, size - 20  # 顶点在底部中央
+    ray_len = size - 50
+    lw = 3  # 线宽
+
+    if angle_type == "直角":
+        angle_deg = 90
+    elif angle_type == "锐角":
+        angle_deg = 50
+    else:  # 钝角
+        angle_deg = 130
+
+    # 水平射线（向右）
+    end_h = (cx + ray_len, cy)
+    # 另一条射线（按角度逆时针旋转）
+    rad = _math.radians(angle_deg)
+    end_a = (cx - int(ray_len * _math.cos(rad)),
+             cy - int(ray_len * _math.sin(rad)))
+
+    draw.line([end_a, (cx, cy), end_h], fill=(60, 60, 60), width=lw)
+
+    # 画角度弧线
+    arc_r = 22
+    if angle_type == "直角":
+        # 直角标记：小正方形
+        sq = 14
+        draw.rectangle([cx, cy - sq, cx + sq, cy], outline=(60, 60, 60), width=2)
+    else:
+        # 弧线
+        start_angle = 0
+        end_angle = -angle_deg
+        bbox = [cx - arc_r, cy - arc_r, cx + arc_r, cy + arc_r]
+        draw.arc(bbox, start=end_angle, end=0, fill=(60, 60, 60), width=2)
+
+    # 画顶点小圆点
+    draw.ellipse([cx - 4, cy - 4, cx + 4, cy + 4], fill=(60, 60, 60))
+
+    buf = BytesIO()
+    img.save(buf, format='PNG')
+    buf.seek(0)
+    return buf
+
+
 def render_angle_question(doc, q_num: int, q_content: str, angles: list):
     """
-    渲染角的识别题。
+    渲染角的识别题 —— 用 PIL 绘制清晰的角图形。
 
-    angles: [("直", "┌"), ("锐", "∠"), ("钝", "╲"), ...]
-    每个元素为 (类型名, Unicode符号)
+    angles: [{"symbol": "╲", "label": "第1个"}, ...]
     """
     p = doc.add_paragraph()
     p.paragraph_format.space_after = Pt(2)
     run = p.add_run(f"{q_num}. {q_content}")
     set_cjk_font(run, FONT, BODY_SIZE)
 
-    # 用表格渲染角
-    table = doc.add_table(rows=1, cols=len(angles))
-    table.alignment = 1  # center
-    set_table_borders(table, val="single", sz="4")
+    # 用表格排列角图形
+    table = doc.add_table(rows=2, cols=len(angles))
+    table.alignment = 1
+    set_table_borders(table, val="none")
 
-    for i, (label, symbol) in enumerate(angles):
-        cell = table.cell(0, i)
-        set_cell_border(cell, top="single", bottom="single",
-                       left="single", right="single")
-        p = cell.paragraphs[0]
-        p.alignment = WD_ALIGN_PARAGRAPH.CENTER
-        p.paragraph_format.space_before = Pt(4)
-        p.paragraph_format.space_after = Pt(2)
-        run = p.add_run(symbol)
-        set_cjk_font(run, FONT, 18)
-        p2 = cell.add_paragraph()
-        p2.alignment = WD_ALIGN_PARAGRAPH.CENTER
-        run2 = p2.add_run(f"({label})")
-        set_cjk_font(run2, FONT, 10)
+    # 映射 symbol → 角类型
+    SYMBOL_TO_TYPE = {
+        "┌": "直角", "∟": "直角",
+        "∠": "锐角", "╱": "锐角",
+        "╲": "钝角", "╱ ": "钝角",
+    }
+
+    for i, angle_info in enumerate(angles):
+        symbol = angle_info.get("symbol", "∠")
+        label = angle_info.get("label", f"第{i+1}个")
+        angle_type = SYMBOL_TO_TYPE.get(symbol, "锐角")
+
+        # 图片行
+        cell_img = table.cell(0, i)
+        cell_img.width = Cm(3.0)
+        p_img = cell_img.paragraphs[0]
+        p_img.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        img_buf = _draw_angle_image(angle_type)
+        run_img = p_img.add_run()
+        run_img.add_picture(img_buf, width=Cm(2.5))
+
+        # 标签行
+        cell_lbl = table.cell(1, i)
+        p_lbl = cell_lbl.paragraphs[0]
+        p_lbl.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        run_lbl = p_lbl.add_run(f"({label})")
+        set_cjk_font(run_lbl, FONT, 10)
 
     doc.add_paragraph()
 
@@ -99,10 +164,40 @@ def render_count_angles_question(doc, q_num: int, q_content: str, shapes: list):
     doc.add_paragraph()
 
 
-def render_grid_count_question(doc, q_num: int, q_content: str,
-                               rows: int, cols: int):
+def _draw_grid_image(rows: int, cols: int, cell_size: int = 60) -> BytesIO:
     """
-    渲染网格图形计数题（数长方形/正方形）。
+    用 PIL 绘制清晰的方格网格图。
+
+    cell_size: 每格像素大小
+    """
+    lw = 2  # 线宽
+    w = cols * cell_size + lw
+    h = rows * cell_size + lw
+
+    img = Image.new('RGB', (w, h), 'white')
+    draw = ImageDraw.Draw(img)
+
+    # 画横线
+    for r in range(rows + 1):
+        y = r * cell_size
+        draw.line([(0, y), (w, y)], fill=(40, 40, 40), width=lw)
+
+    # 画竖线
+    for c in range(cols + 1):
+        x = c * cell_size
+        draw.line([(x, 0), (x, h)], fill=(40, 40, 40), width=lw)
+
+    buf = BytesIO()
+    img.save(buf, format='PNG')
+    buf.seek(0)
+    return buf
+
+
+def render_grid_count_question(doc, q_num: int, q_content: str,
+                               rows: int, cols: int, answer: str = "",
+                               description: str = ""):
+    """
+    渲染网格图形计数题 —— 用 PIL 绘制清晰网格。
 
     绘制一个 rows x cols 的完整网格，下方留空作答。
     """
@@ -111,29 +206,17 @@ def render_grid_count_question(doc, q_num: int, q_content: str,
     run = p.add_run(f"{q_num}. {q_content}")
     set_cjk_font(run, FONT, BODY_SIZE)
 
-    # 画网格
-    table = doc.add_table(rows=rows, cols=cols)
-    table.alignment = 1
-    set_table_borders(table, val="single", sz="6")
+    # 生成网格图片并嵌入
+    img_buf = _draw_grid_image(rows, cols)
+    if img_buf:
+        p_img = doc.add_paragraph()
+        p_img.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        p_img.paragraph_format.space_before = Pt(6)
+        p_img.paragraph_format.space_after = Pt(4)
+        run_img = p_img.add_run()
+        run_img.add_picture(img_buf, width=Cm(6))
 
-    # 设置每个单元格为正方形（约0.8cm）
-    for r in range(rows):
-        for c in range(cols):
-            cell = table.cell(r, c)
-            cell.width = Cm(1.0)
-            # 添加空白内容撑起高度
-            p = cell.paragraphs[0]
-            p.paragraph_format.space_before = Pt(4)
-            p.paragraph_format.space_after = Pt(4)
-            run = p.add_run("  ")
-            set_cjk_font(run, FONT, 10)
-
-    # 作答区
-    p_ans = doc.add_paragraph()
-    p_ans.paragraph_format.space_before = Pt(4)
-    run = p_ans.add_run("图中有（    ）个长方形，（    ）个正方形。")
-    set_cjk_font(run, FONT, BODY_SIZE)
-
+    # 题目内容已包含填空括号，下方仅放网格图即可
     doc.add_paragraph()
 
 
@@ -415,7 +498,7 @@ POLYGONS_FOR_COUNT = [
 # ============================================================
 
 def _draw_clock_image(hour: int, minute: int, second: int = 0,
-                       draw_hands: bool = True) -> BytesIO:
+                       draw_hands: bool = True, size: int = 200) -> BytesIO:
     """
     用 PIL 绘制圆形钟面，返回 PNG 的 BytesIO。
 
@@ -424,10 +507,10 @@ def _draw_clock_image(hour: int, minute: int, second: int = 0,
         minute: 分钟 (0-59)
         second: 秒 (0-59, 默认 0)
         draw_hands: 是否绘制指针（False=空白钟面供学生画）
+        size: 图片像素尺寸（默认 200）
     """
-    size = 200
-    cx, cy = 100, 100
-    r = 90
+    cx = cy = size // 2
+    r = int(size * 0.45)
 
     img = Image.new('RGB', (size, size), 'white')
     draw = ImageDraw.Draw(img)
@@ -583,18 +666,96 @@ def render_clock_time_question(doc, q_num: int, q_content: str,
 # 立方体堆叠渲染
 # ============================================================
 
+def _draw_isometric_cubes(grid: list, a: int = 36, b: int = 18,
+                          h: int = 32) -> BytesIO:
+    """
+    用 PIL 绘制等轴测立体立方体堆叠图。
+
+    参数：
+        grid: 二维数组，grid[r][c] = 该位置的立方体层数
+        a: 顶部菱形半宽（像素）
+        b: 顶部菱形半高（像素）
+        h: 立方体高度（像素）
+
+    三个可见面配色：
+        顶面 — 最亮，左侧面 — 中等，右侧面 — 最暗
+    绘制顺序从远到近、从下到上，保证遮挡正确。
+    """
+    rows = len(grid)
+    cols = len(grid[0]) if grid else 0
+    if rows == 0 or cols == 0:
+        return BytesIO()
+
+    max_layers = max(max(row) for row in grid)
+
+    # 计算图片尺寸
+    margin = 40
+    img_w = (rows + cols) * a + margin * 2
+    img_h = max_layers * h + (rows + cols) * b + h + margin * 2
+
+    origin_x = img_w // 2
+    origin_y = margin + max_layers * h + b
+
+    img = Image.new('RGB', (img_w, img_h), 'white')
+    draw = ImageDraw.Draw(img)
+
+    # 收集所有需要绘制的立方体，按深度排序
+    cubes = []
+    for r in range(rows):
+        for c in range(cols):
+            for l in range(grid[r][c]):
+                cubes.append((r, c, l))
+
+    # 排序：低层先画，(row+col) 小的（远的）先画
+    cubes.sort(key=lambda x: (x[2], x[0] + x[1]))
+
+    # 三种面的颜色（打印友好的灰度梯度）
+    color_top = (230, 238, 250)     # 顶面 — 最亮
+    color_left = (170, 195, 225)    # 左侧面 — 中等
+    color_right = (125, 155, 195)   # 右侧面 — 最暗
+    color_outline = (70, 70, 70)    # 边线
+
+    for r, c, l in cubes:
+        # 顶部菱形中心
+        cx = origin_x + (c - r) * a
+        cy = origin_y + (r + c) * b - l * h
+
+        # 顶部菱形四个顶点
+        top_pt = (cx, cy - b)           # 上
+        right_pt = (cx + a, cy)         # 右
+        bottom_pt = (cx, cy + b)        # 下
+        left_pt = (cx - a, cy)          # 左
+
+        # 左侧面：左→下→下+h→左+h
+        left_face = [left_pt, bottom_pt,
+                     (cx, cy + b + h), (cx - a, cy + h)]
+        # 右侧面：右→下→下+h→右+h
+        right_face = [right_pt, bottom_pt,
+                      (cx, cy + b + h), (cx + a, cy + h)]
+        # 顶面菱形
+        top_face = [top_pt, right_pt, bottom_pt, left_pt]
+
+        # 绘制面
+        draw.polygon(left_face, fill=color_left, outline=color_outline)
+        draw.polygon(right_face, fill=color_right, outline=color_outline)
+        draw.polygon(top_face, fill=color_top, outline=color_outline)
+
+        # 顶面十字线（增强立体感）
+        draw.line([top_pt, bottom_pt], fill=color_outline, width=1)
+        draw.line([left_pt, right_pt], fill=color_outline, width=1)
+
+    buf = BytesIO()
+    img.save(buf, format='PNG')
+    buf.seek(0)
+    return buf
+
+
 def render_cube_stack_question(doc, q_num: int, q_content: str,
                                grid: list, answer: str = ""):
     """
-    渲染立方体堆叠计数题。
+    渲染立方体堆叠计数题 —— 使用等轴测立体图。
 
-    grid: 二维数组，每个元素是层数 (0=空, 1=1个立方体, 2=2个, ...)
-    用着色的表格单元格表示不同的层数。
-
-    示例 2x2 网格:
-    grid = [[2, 1],
-            [1, 0]]
-    表示左上角2层，右上角1层，左下角1层，右下角空。
+    grid: 二维数组，grid[r][c] = 该位置的立方体层数
     """
     from docx.oxml.ns import qn
     from docx.oxml import OxmlElement
@@ -604,44 +765,15 @@ def render_cube_stack_question(doc, q_num: int, q_content: str,
     run = p.add_run(f"{q_num}. {q_content}")
     set_cjk_font(run, FONT, BODY_SIZE)
 
-    rows = len(grid)
-    cols = len(grid[0]) if grid else 0
-
-    table = doc.add_table(rows=rows, cols=cols)
-    table.alignment = 1
-    set_table_borders(table, val="single", sz="6")
-
-    # 层数对应的着色
-    shade_colors = {
-        0: "FFFFFF",  # 空 = 白色
-        1: "D9E2F3",  # 1层 = 浅蓝
-        2: "B4C6E7",  # 2层 = 中蓝
-        3: "8DB4E2",  # 3层 = 深蓝
-        4: "5B9BD5",  # 4层 = 更深的蓝
-    }
-
-    for r in range(rows):
-        for c in range(cols):
-            cell = table.cell(r, c)
-            cell.width = Cm(1.2)
-
-            # 设置背景色
-            layers = grid[r][c]
-            color = shade_colors.get(layers, "FFFFFF")
-            if color != "FFFFFF":
-                set_cell_shading(cell, color)
-
-            # 显示层数
-            p2 = cell.paragraphs[0]
-            p2.alignment = WD_ALIGN_PARAGRAPH.CENTER
-            p2.paragraph_format.space_before = Pt(4)
-            p2.paragraph_format.space_after = Pt(4)
-            if layers > 0:
-                run2 = p2.add_run("■" * layers if layers <= 3 else f"×{layers}")
-                set_cjk_font(run2, FONT, 9)
-            else:
-                run2 = p2.add_run(" ")
-                set_cjk_font(run2, FONT, 9)
+    # 生成等轴测立体图并嵌入 Word
+    img_buf = _draw_isometric_cubes(grid)
+    if img_buf:
+        p_img = doc.add_paragraph()
+        p_img.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        p_img.paragraph_format.space_before = Pt(6)
+        p_img.paragraph_format.space_after = Pt(6)
+        run_img = p_img.add_run()
+        run_img.add_picture(img_buf, width=Cm(7))
 
     # 问题作答区
     p_ans = doc.add_paragraph()

@@ -159,6 +159,29 @@ class SyncEngine:
 
         return {"added": added, "skipped": skipped, "error": None}
 
+    # ================================================================
+    # 来源3：远程 API
+    # ================================================================
+
+    def _fetch_from_api(self, api_url: str) -> dict:
+        """从远程 API 获取题目"""
+        try:
+            import requests
+            headers = {}
+            api_key = self.sync_config.get("api_key", "")
+            if api_key:
+                headers["Authorization"] = f"Bearer {api_key}"
+            resp = requests.get(api_url, headers=headers, timeout=30)
+            resp.raise_for_status()
+            data = resp.json()
+            return self._process_remote_questions(data)
+        except ImportError:
+            logger.warning("requests 未安装，无法访问远程 API")
+            return {"added": 0, "skipped": 0, "error": "requests 未安装"}
+        except Exception as e:
+            logger.warning(f"API 请求失败: {e}")
+            return {"added": 0, "skipped": 0, "error": str(e)}
+
     def _process_remote_questions(self, data) -> dict:
         """处理远程返回的题目数据"""
         if not isinstance(data, list):

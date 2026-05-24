@@ -43,121 +43,110 @@ TYPE_MAP = {
 
 def cmd_generate(args, config: ConfigManager):
     """生成一份试卷"""
-    db = DBManager(config.get_db_path())
+    with DBManager(config.get_db_path()) as db:
+        if db.is_empty() and config.get_seed_on_empty():
+            print("题库为空，正在导入内置种子数据...")
+            seed_qs = get_all_seed_questions()
+            db.insert_batch(seed_qs)
+            total, _ = db.get_question_count()
+            print(f"已导入 {total} 道种子题目")
 
-    if db.is_empty() and config.get_seed_on_empty():
-        print("题库为空，正在导入内置种子数据...")
-        seed_qs = get_all_seed_questions()
-        db.insert_batch(seed_qs)
-        total, _ = db.get_question_count()
-        print(f"已导入 {total} 道种子题目")
+        # 单元过滤
+        unit_filter = None
+        if args.units:
+            unit_filter = [int(u.strip()) for u in args.units.split(",")]
 
-    # 单元过滤
-    unit_filter = None
-    if args.units:
-        unit_filter = [int(u.strip()) for u in args.units.split(",")]
+        # 题型过滤
+        section_filter = None
+        tag_filter = None
+        if args.type:
+            t = args.type.strip()
+            if t == "图形" or t == "图形题":
+                tag_filter = "图形"
+            elif t in TYPE_MAP:
+                section_filter = [TYPE_MAP[t]]
 
-    # 题型过滤
-    section_filter = None
-    tag_filter = None
-    if args.type:
-        t = args.type.strip()
-        if t == "图形" or t == "图形题":
-            tag_filter = "图形"
-        elif t in TYPE_MAP:
-            section_filter = [TYPE_MAP[t]]
+        builder = ExamBuilder(config, db)
+        exam = builder.build_exam(
+            week_label=args.week or "",
+            unit_filter=unit_filter,
+            section_filter=section_filter,
+            tag_filter=tag_filter,
+        )
 
-    builder = ExamBuilder(config, db)
-    exam = builder.build_exam(
-        week_label=args.week or "",
-        unit_filter=unit_filter,
-        section_filter=section_filter,
-        tag_filter=tag_filter,
-    )
+        renderer = DocxRenderer(config)
+        type_tag = f"_{args.type}" if args.type else ""
+        output_name = args.output or f"{config.grade_name}{config.grade_term}_周末练习卷{type_tag}"
+        if args.week:
+            output_name += f"_第{args.week}周"
+        output_name += f"_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+        output_path = os.path.join(config.get_output_dir(), f"{output_name}.docx")
 
-    renderer = DocxRenderer(config)
-    type_tag = f"_{args.type}" if args.type else ""
-    output_name = args.output or f"{config.grade_name}{config.grade_term}_周末练习卷{type_tag}"
-    if args.week:
-        output_name += f"_第{args.week}周"
-    output_name += f"_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
-    output_path = os.path.join(config.get_output_dir(), f"{output_name}.docx")
-
-    filepath = renderer.render(exam, output_path)
-    print(f"[OK] 试卷已生成: {filepath}")
-    print(f"  标题: {exam.title}")
-    print(f"  总分: {exam.total_score} 分 | 共 {exam.total_questions} 题")
-    for section in exam.sections:
-        print(f"  {section.title}: {len(section.questions)}题 / {section.total_score}分")
-
-    db.close()
+        filepath = renderer.render(exam, output_path)
+        print(f"[OK] 试卷已生成: {filepath}")
+        print(f"  标题: {exam.title}")
+        print(f"  总分: {exam.total_score} 分 | 共 {exam.total_questions} 题")
+        for section in exam.sections:
+            print(f"  {section.title}: {len(section.questions)}题 / {section.total_score}分")
 
 
 def cmd_status(args, config: ConfigManager):
     """查看题库统计"""
-    db = DBManager(config.get_db_path())
-    total, by_section = db.get_question_count()
-    units = db.get_available_units()
+    with DBManager(config.get_db_path()) as db:
+        total, by_section = db.get_question_count()
+        units = db.get_available_units()
 
-    print(f"题库路径: {config.get_db_path()}")
-    print(f"题目总数: {total}")
-    print(f"涵盖单元: {units}")
-    print(f"\n按题型/难度分布:")
-    print(f"{'题型':<16} {'难度1':>6} {'难度2':>6} {'难度3':>6} {'难度4':>6} {'难度5':>6} {'小计':>6}")
-    print("-" * 58)
+        print(f"题库路径: {config.get_db_path()}")
+        print(f"题目总数: {total}")
+        print(f"涵盖单元: {units}")
+        print(f"\n按题型/难度分布:")
+        print(f"{'题型':<16} {'难度1':>6} {'难度2':>6} {'难度3':>6} {'难度4':>6} {'难度5':>6} {'小计':>6}")
+        print("-" * 58)
 
-    section_names = {
-        "oral_calc": "口算题", "fill_blank": "填空题", "choice": "选择题",
-        "vertical_calc": "竖式/脱式", "word_problem": "解决问题",
-    }
-    for section_id, name in section_names.items():
-        dist = by_section.get(section_id, {})
-        subtotal = sum(dist.values())
-        print(f"{name:<16} {dist.get(1,0):>6} {dist.get(2,0):>6} "
-              f"{dist.get(3,0):>6} {dist.get(4,0):>6} {dist.get(5,0):>6} {subtotal:>6}")
-
-    db.close()
+        section_names = {
+            "oral_calc": "口算题", "fill_blank": "填空题", "choice": "选择题",
+            "vertical_calc": "竖式/脱式", "word_problem": "解决问题",
+        }
+        for section_id, name in section_names.items():
+            dist = by_section.get(section_id, {})
+            subtotal = sum(dist.values())
+            print(f"{name:<16} {dist.get(1,0):>6} {dist.get(2,0):>6} "
+                  f"{dist.get(3,0):>6} {dist.get(4,0):>6} {dist.get(5,0):>6} {subtotal:>6}")
 
 
 def cmd_seed(args, config: ConfigManager):
     """管理种子数据"""
-    db = DBManager(config.get_db_path())
-
-    if args.reload:
-        print("重置题库...")
-        db.reset()
-        seed_qs = get_all_seed_questions()
-        db.insert_batch(seed_qs)
-        total, _ = db.get_question_count()
-        print(f"已重新导入 {total} 道种子题目")
-
-    db.close()
+    with DBManager(config.get_db_path()) as db:
+        if args.reload:
+            print("重置题库...")
+            db.reset()
+            seed_qs = get_all_seed_questions()
+            db.insert_batch(seed_qs)
+            total, _ = db.get_question_count()
+            print(f"已重新导入 {total} 道种子题目")
 
 
 def cmd_sync(args, config: ConfigManager):
     """手动触发题库更新（算法生成+网络抓取+本地导入）"""
-    db = DBManager(config.get_db_path())
-    sync_cfg = config.get_sync_config()
-    engine = SyncEngine(db, sync_cfg)
+    with DBManager(config.get_db_path()) as db:
+        sync_cfg = config.get_sync_config()
+        engine = SyncEngine(db, sync_cfg)
 
-    if not sync_cfg.get("enabled", True):
-        print("自动更新未启用（config.yaml 中 sync.enabled: false）")
-        db.close()
-        return
+        if not sync_cfg.get("enabled", True):
+            print("自动更新未启用（config.yaml 中 sync.enabled: false）")
+            return
 
-    print("正在更新题库...")
-    result = engine.sync_once()
-    parts = [f"算法生成: +{result['generated']}题"]
-    if result['scraped'] > 0:
-        parts.append(f"网络抓取: +{result['scraped']}题")
-    if result['imported'] > 0:
-        parts.append(f"本地导入: +{result['imported']}题")
-    total = result["generated"] + result["scraped"] + result["imported"]
-    print(f"[OK] 更新完成（总+{total}题）: {', '.join(parts)}")
-    if result.get("error"):
-        print(f"  警告: {result['error']}")
-
-    db.close()
+        print("正在更新题库...")
+        result = engine.sync_once()
+        parts = [f"算法生成: +{result['generated']}题"]
+        if result['scraped'] > 0:
+            parts.append(f"网络抓取: +{result['scraped']}题")
+        if result['imported'] > 0:
+            parts.append(f"本地导入: +{result['imported']}题")
+        total = result["generated"] + result["scraped"] + result["imported"]
+        print(f"[OK] 更新完成（总+{total}题）: {', '.join(parts)}")
+        if result.get("error"):
+            print(f"  警告: {result['error']}")
 
 
 def main():

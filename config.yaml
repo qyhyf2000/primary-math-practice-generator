@@ -8,6 +8,15 @@ grade:
   name: "二年级"
   term: "下册"
   textbook: "北师大版"
+  units:
+    - "第一单元 除法"
+    - "第二单元 混合运算"
+    - "第三单元 生活中的大数"
+    - "第四单元 测量"
+    - "第五单元 加与减"
+    - "第六单元 认识图形"
+    - "第七单元 时分秒"
+    - "第八单元 调查与记录"
 
 # ---- 试卷结构（时间预算约20分钟） ----
 exam:
@@ -54,8 +63,7 @@ question_bank:
   db_path: "data/question_bank.db"
   seed_on_empty: true
 
-  # 排重窗口（单位：周）
-  dedup_window_weeks: 4
+  # 选题策略：按题目历史使用次数分层，优先选从未用过的题，所有题循环复用
 
   # 自动更新配置
   sync:
@@ -113,3 +121,9 @@ rendering:
   body:
     font_size_pt: 12
     line_spacing: 1.5
+
+  oral_calc:
+    columns: 5
+
+  graphics:
+    clock_size_px: 200

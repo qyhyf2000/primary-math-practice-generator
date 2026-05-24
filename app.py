@@ -23,16 +23,7 @@ from src.renderer.docx_renderer import DocxRenderer
 
 config = ConfigManager()
 
-UNIT_NAMES = {
-    1: "第一单元 除法",
-    2: "第二单元 混合运算",
-    3: "第三单元 生活中的大数",
-    4: "第四单元 测量",
-    5: "第五单元 加与减",
-    6: "第六单元 认识图形",
-    7: "第七单元 时分秒",
-    8: "第八单元 调查与记录",
-}
+UNIT_NAMES = config.get_units()
 
 SECTION_NAMES = {
     "oral_calc": "口算题",
@@ -90,47 +81,45 @@ def on_generate(week: str, units_selected: list, section_type: str) -> tuple:
         elif section_type in TYPE_TO_SECTION:
             section_filter = [TYPE_TO_SECTION[section_type]]
 
-    db = DBManager(config.get_db_path())
     try:
-        if db.is_empty():
-            db.insert_batch(get_all_seed_questions())
+        with DBManager(config.get_db_path()) as db:
+            if db.is_empty():
+                db.insert_batch(get_all_seed_questions())
 
-        builder = ExamBuilder(config, db)
-        exam = builder.build_exam(
-            week_label=week or "",
-            unit_filter=units,
-            section_filter=section_filter,
-            tag_filter=tag_filter,
-        )
+            builder = ExamBuilder(config, db)
+            exam = builder.build_exam(
+                week_label=week or "",
+                unit_filter=units,
+                section_filter=section_filter,
+                tag_filter=tag_filter,
+            )
 
-        renderer = DocxRenderer(config)
-        type_tag = f"_{section_type}" if section_type != "全部题型" else ""
-        output_name = f"{config.grade_name}{config.grade_term}_周末练习卷{type_tag}"
-        if week:
-            output_name += f"_第{week}周"
-        output_name += f"_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
-        output_path = os.path.join(config.get_output_dir(), f"{output_name}.docx")
-        filepath = renderer.render(exam, output_path)
+            renderer = DocxRenderer(config)
+            type_tag = f"_{section_type}" if section_type != "全部题型" else ""
+            output_name = f"{config.grade_name}{config.grade_term}_周末练习卷{type_tag}"
+            if week:
+                output_name += f"_第{week}周"
+            output_name += f"_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+            output_path = os.path.join(config.get_output_dir(), f"{output_name}.docx")
+            filepath = renderer.render(exam, output_path)
 
-        lines = [
-            exam.title,
-            f"题型: {section_type or '全部'} | 总分: {exam.total_score} 分 | 共 {exam.total_questions} 题",
-            "",
-        ]
-        for sec in exam.sections:
-            lines.append(f"  {sec.title}: {len(sec.questions)}题 / {sec.total_score}分")
+            lines = [
+                exam.title,
+                f"题型: {section_type or '全部'} | 总分: {exam.total_score} 分 | 共 {exam.total_questions} 题",
+                "",
+            ]
+            for sec in exam.sections:
+                lines.append(f"  {sec.title}: {len(sec.questions)}题 / {sec.total_score}分")
 
-        return "\n".join(lines), filepath
+            return "\n".join(lines), filepath
     except Exception as e:
         import traceback
         traceback.print_exc()
         return f"生成失败: {e}", None
-    finally:
-        db.close()
 
 
 def on_refresh_stats() -> tuple:
-    """刷新题库统计，含已用标记"""
+    """刷新题库统计，按使用次数（tier）展示"""
     db = DBManager(config.get_db_path())
     try:
         if db.is_empty():
@@ -138,37 +127,34 @@ def on_refresh_stats() -> tuple:
 
         total, by_section = db.get_question_count()
         available_units = db.get_available_units()
-        usage = db.get_available_counts(weeks=4)
 
-        # 概览
-        total_used = sum(v["used"] for v in usage.values())
+        # 按 tier 统计（全历史使用次数）
+        tier_counts = _get_tier_summary(db)
+
         overview = (
-            f"**题目总数**: {total} 题 | **最近4周已使用**: {total_used} 题 | "
-            f"**可用**: {total - total_used} 题\n\n"
-            f"**涵盖单元**: {', '.join(str(u) for u in available_units)}\n\n"
-            f"**教材**: {config.textbook} {config.grade_name}{config.grade_term}"
+            f"**题目总数**: {total} 题 | **涵盖单元**: {', '.join(str(u) for u in available_units)}\n\n"
+            f"**教材**: {config.textbook} {config.grade_name}{config.grade_term}\n\n"
+            f"**选题策略**: 按历史使用次数分层，优先选从未用过的题，全部题目循环复用"
         )
 
-        # 分布表（含已用列）
+        # 题型 x 难度分布表（保留原有格式）
         rows = []
         for section_id, name in SECTION_NAMES.items():
             dist = by_section.get(section_id, {})
             subtotal = sum(dist.values())
-            u = usage.get(section_id, {"used": 0, "available": subtotal})
+            t0 = tier_counts.get(section_id, {}).get(0, 0)
+            t1p = subtotal - t0
             row = (
                 [name]
                 + [dist.get(i, 0) for i in range(1, 6)]
                 + [subtotal]
-                + [u["used"], u["available"]]
+                + [t0, t1p]
             )
             rows.append(row)
 
-        # 已用题目标记摘要
-        dedup_weeks = config.get_dedup_window_weeks()
         label_info = (
-            f"排重窗口: {dedup_weeks} 周 | "
-            f"窗口内已用 {total_used} 题 | "
-            f"剩余可用 {total - total_used} 题"
+            f"**层级说明**: Tier 0 = 从未使用过的题目（优先抽取），"
+            f"Tier 1+ = 使用过 1 次以上的题目（后续循环使用）"
         )
 
         return overview, rows, label_info
@@ -176,83 +162,95 @@ def on_refresh_stats() -> tuple:
         db.close()
 
 
+def _get_tier_summary(db: DBManager) -> dict:
+    """统计每个题型各 tier 的题目数量"""
+    rows = db.conn.execute("""
+        SELECT q.section,
+               (SELECT COUNT(*) FROM exam_history eh WHERE eh.question_id = q.id) AS tier,
+               COUNT(*) AS cnt
+        FROM questions q
+        GROUP BY q.section, tier
+        ORDER BY q.section, tier
+    """).fetchall()
+    result: dict = {}
+    for section, tier, cnt in rows:
+        if section not in result:
+            result[section] = {}
+        result[section][tier] = cnt
+    return result
+
+
 def on_reload_seed() -> str:
     """重置种子数据"""
-    db = DBManager(config.get_db_path())
     try:
-        db.reset()
-        seed_qs = get_all_seed_questions()
-        db.insert_batch(seed_qs)
-        total, _ = db.get_question_count()
-        return f"已重置题库，重新导入 {total} 道种子题目"
+        with DBManager(config.get_db_path()) as db:
+            db.reset()
+            seed_qs = get_all_seed_questions()
+            db.insert_batch(seed_qs)
+            total, _ = db.get_question_count()
+            return f"已重置题库，重新导入 {total} 道种子题目"
     except Exception as e:
         import traceback
         traceback.print_exc()
         return f"重置失败: {e}"
-    finally:
-        db.close()
 
 
 def on_scrape_url(url: str) -> str:
     """从指定 URL 抓取题目"""
     if not url or not url.startswith("http"):
         return "请输入有效的 URL"
-    db = DBManager(config.get_db_path())
     try:
-        from src.question_bank.scrapers import scrape_urls
-        raw = scrape_urls([url])
-        added = 0
-        for item in raw:
-            if not db.content_exists(item["content"]):
-                from src.question_bank.models import Question
-                q = Question(
-                    unit=item.get("unit", 0),
-                    section=item.get("section", "oral_calc"),
-                    difficulty=item.get("difficulty", 1),
-                    content=item["content"],
-                    answer=item.get("answer", ""),
-                    source="scraped",
-                )
-                db.insert_question(q)
-                added += 1
-        return f"从 {url[-40:]} 抓取到 {len(raw)} 题，新入库 {added} 题"
+        with DBManager(config.get_db_path()) as db:
+            from src.question_bank.scrapers import scrape_urls
+            raw = scrape_urls([url])
+            added = 0
+            for item in raw:
+                if not db.content_exists(item["content"]):
+                    from src.question_bank.models import Question
+                    q = Question(
+                        unit=item.get("unit", 0),
+                        section=item.get("section", "oral_calc"),
+                        difficulty=item.get("difficulty", 1),
+                        content=item["content"],
+                        answer=item.get("answer", ""),
+                        source="scraped",
+                    )
+                    db.insert_question(q)
+                    added += 1
+            return f"从 {url[-40:]} 抓取到 {len(raw)} 题，新入库 {added} 题"
     except Exception as e:
         import traceback
         traceback.print_exc()
         return f"抓取失败: {e}"
-    finally:
-        db.close()
 
 
 def on_update_bank() -> str:
     """一键更新题库（算法生成 + 网络抓取 + 本地导入）"""
-    db = DBManager(config.get_db_path())
     try:
-        sync_cfg = config.get_sync_config()
-        if not sync_cfg.get("enabled", True):
-            return "自动更新未启用（config.yaml 中 sync.enabled: false）"
+        with DBManager(config.get_db_path()) as db:
+            sync_cfg = config.get_sync_config()
+            if not sync_cfg.get("enabled", True):
+                return "自动更新未启用（config.yaml 中 sync.enabled: false）"
 
-        engine = SyncEngine(db, sync_cfg)
-        result = engine.sync_once()
+            engine = SyncEngine(db, sync_cfg)
+            result = engine.sync_once()
 
-        parts = []
-        parts.append(f"算法生成: +{result['generated']}题")
-        if result['scraped'] > 0:
-            parts.append(f"网络抓取: +{result['scraped']}题")
-        if result['imported'] > 0:
-            parts.append(f"本地导入: +{result['imported']}题")
+            parts = []
+            parts.append(f"算法生成: +{result['generated']}题")
+            if result['scraped'] > 0:
+                parts.append(f"网络抓取: +{result['scraped']}题")
+            if result['imported'] > 0:
+                parts.append(f"本地导入: +{result['imported']}题")
 
-        total = result["generated"] + result["scraped"] + result["imported"]
+            total = result["generated"] + result["scraped"] + result["imported"]
 
-        if result.get("error"):
-            return f"更新完成（总+{total}题）: {', '.join(parts)} | ⚠ {result['error']}"
-        return f"更新完成（总+{total}题）: {', '.join(parts)}"
+            if result.get("error"):
+                return f"更新完成（总+{total}题）: {', '.join(parts)} | ⚠ {result['error']}"
+            return f"更新完成（总+{total}题）: {', '.join(parts)}"
     except Exception as e:
         import traceback
         traceback.print_exc()
         return f"更新失败: {e}"
-    finally:
-        db.close()
 
 
 # 保留旧名称兼容
@@ -283,7 +281,7 @@ def on_show_config() -> str:
         f"{rendering['body']['font_size_pt']}pt"
     )
     lines.append(
-        f"**排重**: {config.get_dedup_window_weeks()} 周窗口"
+        "**选题策略**: 按使用次数分层，优先抽没做过的题，全部题循环复用"
     )
 
     # 同步状态
@@ -369,9 +367,9 @@ def build_ui():
             stats_table = gr.Dataframe(
                 headers=[
                     "题型", "难度1", "难度2", "难度3", "难度4", "难度5",
-                    "总题数", "已使用", "可用",
+                    "总题数", "Tier 0 (从未使用)", "Tier 1+ (已使用)",
                 ],
-                label="题型 x 难度分布（含最近4周使用标记）",
+                label="题型 x 难度分布（含使用层级）",
                 interactive=False,
             )
 

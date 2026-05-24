@@ -381,7 +381,6 @@ def _gen_gfx_count_angles(diff: int) -> Question:
         ("⬡", "六边形", 6),
         ("▱", "平行四边形", 4),
     ]
-    import json as _json
     selected = random.sample(shapes, min(4, len(shapes)))
     graphic = {
         "type": "count_angles",
@@ -392,14 +391,13 @@ def _gen_gfx_count_angles(diff: int) -> Question:
         unit=6, section="fill_blank", difficulty=diff,
         content="下面各有几个角？填在括号里。",
         answer=answers,
-        knowledge_point="数角", tags=f"图形,数角,graphic:{_json.dumps(graphic, ensure_ascii=False)}",
+        knowledge_point="数角", tags=f"图形,数角,graphic:{json.dumps(graphic, ensure_ascii=False)}",
         source="generated",
     )
 
 
 def _gen_gfx_angle_identify(diff: int) -> Question:
     """图形题：角分类"""
-    import json as _json
     angle_data = [
         ("╲", "钝角"), ("∠", "锐角"), ("┌", "直角"),
     ]
@@ -416,14 +414,13 @@ def _gen_gfx_angle_identify(diff: int) -> Question:
         unit=6, section="fill_blank", difficulty=diff,
         content="用三角尺比一比，下面的角各是什么角？",
         answer="；".join(a[1] for a in angle_data),
-        knowledge_point="角的分类", tags=f"图形,角识别,graphic:{_json.dumps(graphic, ensure_ascii=False)}",
+        knowledge_point="角的分类", tags=f"图形,角识别,graphic:{json.dumps(graphic, ensure_ascii=False)}",
         source="generated",
     )
 
 
 def _gen_gfx_grid_count(diff: int) -> Question:
     """图形题：数长方形"""
-    import json as _json
     rows = random.choice([2, 2, 3])
     cols = random.choice([2, 3, 3])
     # 计算网格中的长方形总数
@@ -434,14 +431,13 @@ def _gen_gfx_grid_count(diff: int) -> Question:
         content=f"数一数，下图中有几个长方形？",
         answer=str(total_rects),
         knowledge_point="数长方形",
-        tags=f"图形,数长方形,graphic:{_json.dumps(graphic, ensure_ascii=False)}",
+        tags=f"图形,数长方形,graphic:{json.dumps(graphic, ensure_ascii=False)}",
         source="generated",
     )
 
 
 def _gen_clock_read(diff: int) -> Question:
     """图形题：钟面读时"""
-    import json as _json
     h = _rand(1, 12)
     m = _rand(0, 11) * 5  # 0,5,10,...,55
     # 格式化为时间
@@ -452,14 +448,13 @@ def _gen_clock_read(diff: int) -> Question:
         content="写出下面钟面上的时间。",
         answer=answer,
         knowledge_point="读钟面",
-        tags=f"图形,钟面,graphic:{_json.dumps(graphic, ensure_ascii=False)}",
+        tags=f"图形,钟面,graphic:{json.dumps(graphic, ensure_ascii=False)}",
         source="generated",
     )
 
 
 def _gen_clock_elapsed(diff: int) -> Question:
     """图形题：经过时间"""
-    import json as _json
     h = _rand(7, 10)
     m1 = _rand(0, 3) * 15
     m2 = m1 + _rand(1, 4) * 15
@@ -482,14 +477,13 @@ def _gen_clock_elapsed(diff: int) -> Question:
         content="写出钟面上的时间并计算经过时间。",
         answer=f"{t1} -> {t2} -> {t3}; 经过{d1}分; 经过{d2}分",
         knowledge_point="经过时间",
-        tags=f"图形,钟面,经过时间,graphic:{_json.dumps(graphic, ensure_ascii=False)}",
+        tags=f"图形,钟面,经过时间,graphic:{json.dumps(graphic, ensure_ascii=False)}",
         source="generated",
     )
 
 
 def _gen_cube_stack(diff: int) -> Question:
     """图形题：立方体堆叠计数"""
-    import json as _json
     if diff <= 2:
         rows, cols = 2, 2
     else:
@@ -512,14 +506,13 @@ def _gen_cube_stack(diff: int) -> Question:
         content="数一数，下面的图形由几个小立方体搭成？",
         answer=str(total),
         knowledge_point="数立方体",
-        tags=f"图形,立方体,graphic:{_json.dumps(graphic, ensure_ascii=False)}",
+        tags=f"图形,立方体,graphic:{json.dumps(graphic, ensure_ascii=False)}",
         source="generated",
     )
 
 
 def _gen_cube_view(diff: int) -> Question:
     """图形题：三视图立方体"""
-    import json as _json
     cols = _rand(2, 3)
     front = [_rand(1, 3) for _ in range(cols)]
     side = [_rand(1, min(3, max(front))) for _ in range(_rand(2, 3))]
@@ -530,14 +523,13 @@ def _gen_cube_view(diff: int) -> Question:
         content="根据从正面和侧面看到的形状，算一算一共有几个小立方体？",
         answer=str(answer),
         knowledge_point="三视图",
-        tags=f"图形,立方体,三视图,graphic:{_json.dumps(graphic, ensure_ascii=False)}",
+        tags=f"图形,立方体,三视图,graphic:{json.dumps(graphic, ensure_ascii=False)}",
         source="generated",
     )
 
 
 def _gen_gfx_shape_classify(diff: int) -> Question:
     """图形题：图形分类/命名"""
-    import json as _json
     shape_pool = [
         ("△", "三角形"), ("□", "正方形"), ("▭", "长方形"),
         ("▱", "平行四边形"), ("○", "圆"), ("⬠", "五边形"),
@@ -555,14 +547,13 @@ def _gen_gfx_shape_classify(diff: int) -> Question:
         content="写出下面图形的名称。",
         answer=answers,
         knowledge_point="图形识别",
-        tags=f"图形,图形分类,graphic:{_json.dumps(graphic, ensure_ascii=False)}",
+        tags=f"图形,图形分类,graphic:{json.dumps(graphic, ensure_ascii=False)}",
         source="generated",
     )
 
 
 def _gen_gfx_parallelogram(diff: int) -> Question:
     """图形题：平行四边形变形"""
-    import json as _json
     contents = [
         "看一看，长方形拉成平行四边形后，什么变了？什么没变？",
         "用手拉一拉长方形木框，变成了什么图形？这个图形的对边还相等吗？",
@@ -579,7 +570,7 @@ def _gen_gfx_parallelogram(diff: int) -> Question:
         content=contents[idx],
         answer=answers[idx],
         knowledge_point="平行四边形特性",
-        tags=f"图形,平行四边形,变形,graphic:{_json.dumps(graphic, ensure_ascii=False)}",
+        tags=f"图形,平行四边形,变形,graphic:{json.dumps(graphic, ensure_ascii=False)}",
         source="generated",
     )
 

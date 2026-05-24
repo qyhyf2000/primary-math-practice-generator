@@ -19,3 +19,8 @@ venv/
 # 日志
 logs/
 *.log
+
+# 测试缓存
+.pytest_cache/
+# 测试产物
+output/_test_*.png

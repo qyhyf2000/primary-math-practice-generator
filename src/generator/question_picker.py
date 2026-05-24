@@ -1,4 +1,4 @@
-"""题目选择器 - 按难度分层随机抽取"""
+"""题目选择器 - 按使用次数分层 + 难度分层随机抽取"""
 import random
 from typing import List, Optional, Tuple
 from ..question_bank.db_manager import DBManager
@@ -19,84 +19,99 @@ class QuestionPicker:
         section_id: str,
         count: int,
         difficulty_range: Tuple[int, int],
-        exclude_ids: Optional[List[int]] = None,
         unit_filter: Optional[List[int]] = None,
         tag_filter: Optional[str] = None,
     ) -> List[Question]:
         """
-        从指定题型中按难度分层随机抽取题目。
-        tag_filter: 按标签过滤（如 "图形"）
+        按使用次数分层 + 难度分层随机抽取题目。
+
+        优先选从未用过的题（tier 0），不够再选 tier 1、tier 2……
+        同一 tier 内随机。所有题都会循环复用。
         """
-        exclude_ids = exclude_ids or []
         lo, hi = difficulty_range
 
         if hi <= lo:
-            qs = self.db.get_questions(
-                section=section_id,
-                difficulty_min=lo, difficulty_max=hi,
-                limit=count + len(exclude_ids),
-                exclude_ids=exclude_ids,
-                unit_filter=unit_filter,
-                tag_filter=tag_filter,
+            return self._pick_by_tier(
+                section_id, count, lo, hi, unit_filter, tag_filter
             )
-            if len(qs) < count:
-                raise NotEnoughQuestionsError(
-                    f"{section_id} 在难度 [{lo},{hi}] 范围内可用题目不足 "
-                    f"(需要{count}题, 仅{len(qs)}题可用)"
-                )
-            random.shuffle(qs)
-            return qs[:count]
 
         mid = (lo + hi) // 2
         low_count = max(1, int(count * 0.4))
         high_count = max(1, int(count * 0.4))
         flex_count = count - low_count - high_count
 
-        picked_ids = set()
-        results = []
+        results: List[Question] = []
+        picked_ids: set = set()
 
-        low_qs = self._pick_from_range(
-            section_id, (lo, mid), low_count, exclude_ids, unit_filter, tag_filter
+        low_qs = self._pick_by_tier(
+            section_id, low_count, lo, mid, unit_filter, tag_filter
         )
         self._add_unique(results, low_qs, picked_ids)
 
-        high_qs = self._pick_from_range(
-            section_id, (mid + 1, hi), high_count, exclude_ids, unit_filter, tag_filter
+        high_qs = self._pick_by_tier(
+            section_id, high_count, mid + 1, hi, unit_filter, tag_filter
         )
         self._add_unique(results, high_qs, picked_ids)
 
-        flex_qs = self._pick_from_range(
-            section_id, (lo, hi), flex_count,
-            exclude_ids + [q.id for q in results if q.id], unit_filter, tag_filter
+        flex_qs = self._pick_by_tier(
+            section_id, flex_count, lo, hi, unit_filter, tag_filter
         )
         self._add_unique(results, flex_qs, picked_ids)
 
         if len(results) < count:
             remaining = count - len(results)
-            all_exclude = exclude_ids + [q.id for q in results if q.id]
-            more_qs = self._pick_from_range(
-                section_id, (lo, hi), remaining, all_exclude, unit_filter, tag_filter
+            more_qs = self._pick_by_tier(
+                section_id, remaining, lo, hi, unit_filter, tag_filter
             )
             self._add_unique(results, more_qs, picked_ids)
 
         random.shuffle(results)
         return results[:count]
 
-    def _pick_from_range(
-        self, section: str, diff_range: Tuple[int, int],
-        limit: int, exclude_ids: List[int],
+    def _pick_by_tier(
+        self,
+        section_id: str,
+        count: int,
+        difficulty_min: int,
+        difficulty_max: int,
         unit_filter: Optional[List[int]] = None,
         tag_filter: Optional[str] = None,
     ) -> List[Question]:
-        lo, hi = diff_range
-        return self.db.get_questions(
-            section=section,
-            difficulty_min=lo, difficulty_max=hi,
-            limit=max(limit, 1) + len(exclude_ids),
-            exclude_ids=exclude_ids,
+        """按使用次数层级从低到高选取题目"""
+        candidates = self.db.get_questions_by_tier(
+            section=section_id,
+            difficulty_min=difficulty_min,
+            difficulty_max=difficulty_max,
+            limit=max(count * 5, 50),
             unit_filter=unit_filter,
             tag_filter=tag_filter,
         )
+
+        # 按 tier 分组
+        tiers: dict = {}
+        for q, tier in candidates:
+            tiers.setdefault(tier, []).append(q)
+
+        results: List[Question] = []
+        picked_ids: set = set()
+
+        for tier in sorted(tiers.keys()):
+            if len(results) >= count:
+                break
+            needed = count - len(results)
+            pool = [q for q in tiers[tier] if q.id not in picked_ids]
+            random.shuffle(pool)
+            for q in pool[:needed]:
+                results.append(q)
+                picked_ids.add(q.id)
+
+        if len(results) < count:
+            raise NotEnoughQuestionsError(
+                f"{section_id} 在难度 [{difficulty_min},{difficulty_max}] 范围内可用题目不足 "
+                f"(需要{count}题, 仅{len(results)}题可用)"
+            )
+
+        return results
 
     @staticmethod
     def _add_unique(results: List[Question], new_qs: List[Question],

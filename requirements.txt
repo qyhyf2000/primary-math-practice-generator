@@ -3,3 +3,5 @@ pyyaml>=6.0
 requests>=2.31.0
 apscheduler>=3.10.4
 gradio>=4.0
+Pillow>=10.0.0
+pytest>=8.0

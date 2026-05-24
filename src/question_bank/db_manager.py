@@ -164,6 +164,49 @@ class DBManager:
         ).fetchone()
         return row is not None
 
+    # ---- 分层查询（按使用次数 tier） ----
+
+    def get_questions_by_tier(
+        self,
+        section: str,
+        difficulty_min: int = 1,
+        difficulty_max: int = 5,
+        limit: int = 100,
+        unit_filter: Optional[List[int]] = None,
+        tag_filter: Optional[str] = None,
+    ) -> List[Tuple[Question, int]]:
+        """返回 (题目, 使用次数)，按使用次数（tier）升序排列。
+        tier=0 表示从未被使用过，优先级最高。
+        """
+        sql = """
+            SELECT q.id, q.unit, q.section, q.difficulty, q.content, q.answer,
+                   q.options, q.knowledge_point, q.tags, q.source, q.created_at,
+                   COALESCE(eh.use_count, 0) AS tier
+            FROM questions q
+            LEFT JOIN (
+                SELECT question_id, COUNT(*) AS use_count
+                FROM exam_history
+                GROUP BY question_id
+            ) eh ON q.id = eh.question_id
+            WHERE q.section = ? AND q.difficulty BETWEEN ? AND ?
+        """
+        params: list = [section, difficulty_min, difficulty_max]
+
+        if unit_filter:
+            placeholders = ",".join("?" * len(unit_filter))
+            sql += f" AND q.unit IN ({placeholders})"
+            params.extend(unit_filter)
+
+        if tag_filter:
+            sql += " AND q.tags LIKE ?"
+            params.append(f"%{tag_filter}%")
+
+        sql += " ORDER BY tier ASC, RANDOM() LIMIT ?"
+        params.append(limit)
+
+        rows = self.conn.execute(sql, params).fetchall()
+        return [(self._row_to_question(r), r[-1]) for r in rows]
+
     # ---- 排重历史 ----
 
     def get_recently_used_ids(self, weeks: int = 4) -> List[int]:
@@ -228,3 +271,16 @@ class DBManager:
 
     def close(self):
         self.conn.close()
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self.close()
+        return False
+
+    def __del__(self):
+        try:
+            self.conn.close()
+        except Exception:
+            pass
