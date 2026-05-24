@@ -344,20 +344,6 @@ def build_ui():
                 )
                 grade_info = gr.Markdown("")
 
-            def on_grade_term_change(grade_name, term_name):
-                grade_map = {"一年级": 1, "二年级": 2, "三年级": 3, "四年级": 4, "五年级": 5, "六年级": 6}
-                term_map = {"上册": 1, "下册": 2}
-                config.set_active(grade_map[grade_name], term_map[term_name])
-                units_dict = config.get_units()
-                unit_list = list(units_dict.values())
-                return (f"**{config.textbook} {config.grade_label}** · {len(unit_list)}个单元",
-                        gr.update(choices=unit_list, value=unit_list))
-
-            grade_dd.change(on_grade_term_change, inputs=[grade_dd, term_radio],
-                           outputs=[grade_info, units])
-            term_radio.change(on_grade_term_change, inputs=[grade_dd, term_radio],
-                             outputs=[grade_info, units])
-
             with gr.Row():
                 with gr.Column(scale=1):
                     section_type = gr.Dropdown(
@@ -376,6 +362,22 @@ def build_ui():
                     )
                     btn_gen = gr.Button("生成试卷", variant="primary")
 
+            def on_grade_term_change(grade_name, term_name):
+                grade_map = {"一年级": 1, "二年级": 2, "三年级": 3, "四年级": 4, "五年级": 5, "六年级": 6}
+                term_map = {"上册": 1, "下册": 2}
+                config.set_active(grade_map[grade_name], term_map[term_name])
+                units_dict = config.get_units()
+                unit_list = list(units_dict.values())
+                return (f"**{config.textbook} {config.grade_label}** · {len(unit_list)}个单元",
+                        gr.update(choices=unit_list, value=unit_list))
+
+            grade_dd.change(on_grade_term_change, inputs=[grade_dd, term_radio],
+                           outputs=[grade_info, units])
+            term_radio.change(on_grade_term_change, inputs=[grade_dd, term_radio],
+                             outputs=[grade_info, units])
+
+            with gr.Row():
+                with gr.Column(scale=1):
                     gr.Markdown("---\n**知识点专项突破**")
                     kp_dropdown = gr.Dropdown(
                         choices=[], label="选择薄弱知识点",
