@@ -376,6 +376,14 @@ def build_ui():
                     )
                     btn_gen = gr.Button("生成试卷", variant="primary")
 
+                    gr.Markdown("---\n**知识点专项突破**")
+                    kp_dropdown = gr.Dropdown(
+                        choices=[], label="选择薄弱知识点",
+                        info="筛选该知识点的题目集中练习"
+                    )
+                    kp_count = gr.Slider(5, 30, value=10, step=5, label="题目数量")
+                    btn_kp = gr.Button("生成专项练习卷", variant="secondary")
+
                 with gr.Column(scale=2):
                     preview = gr.Textbox(
                         label="试卷信息",
@@ -383,6 +391,72 @@ def build_ui():
                         interactive=False,
                     )
                     file_dl = gr.File(label="下载 Word 试卷")
+
+            # 切换年级时更新知识点列表
+            def on_refresh_kp(grade_name, term_name):
+                grade_map = {"一年级":1,"二年级":2,"三年级":3,"四年级":4,"五年级":5,"六年级":6}
+                term_map = {"上册":1,"下册":2}
+                g, t = grade_map.get(grade_name,2), term_map.get(term_name,2)
+                db3 = DBManager(config.get_db_path())
+                try:
+                    rows = db3.conn.execute(
+                        "SELECT DISTINCT knowledge_point FROM questions WHERE grade=? AND term=? AND knowledge_point!='' ORDER BY knowledge_point",
+                        (g, t)
+                    ).fetchall()
+                    kps = [r[0] for r in rows] if rows else []
+                    if not kps:
+                        kps = ["请先生成题库"]
+                    return gr.update(choices=kps, value=kps[0] if kps else None)
+                finally:
+                    db3.close()
+
+            grade_dd.change(on_refresh_kp, inputs=[grade_dd, term_radio], outputs=[kp_dropdown])
+            term_radio.change(on_refresh_kp, inputs=[grade_dd, term_radio], outputs=[kp_dropdown])
+
+            def on_kp_practice(grade_name, term_name, kp, count):
+                grade_map = {"一年级":1,"二年级":2,"三年级":3,"四年级":4,"五年级":5,"六年级":6}
+                term_map = {"上册":1,"下册":2}
+                g, t = grade_map.get(grade_name,2), term_map.get(term_name,2)
+                config.set_active(g, t)
+                db3 = DBManager(config.get_db_path())
+                try:
+                    rows = db3.conn.execute(
+                        "SELECT id,grade,term,unit,section,difficulty,content,answer,"
+                        "options,knowledge_point,tags,source,created_at "
+                        "FROM questions WHERE knowledge_point=? AND grade=? AND term=? "
+                        "ORDER BY RANDOM() LIMIT ?",
+                        (kp, g, t, int(count))
+                    ).fetchall()
+                    if not rows:
+                        # try fuzzy match
+                        rows = db3.conn.execute(
+                            "SELECT id,grade,term,unit,section,difficulty,content,answer,"
+                            "options,knowledge_point,tags,source,created_at "
+                            "FROM questions WHERE knowledge_point LIKE ? AND grade=? AND term=? "
+                            "ORDER BY RANDOM() LIMIT ?",
+                            (f"%{kp}%", g, t, int(count))
+                        ).fetchall()
+                    if not rows:
+                        return f"未找到知识点'{kp}'的题目，请先生成题库", None
+                    from src.question_bank.models import Question, Exam, ExamSection
+                    qs = [Question(id=r[0],grade=r[1],term=r[2],unit=r[3],section=r[4],
+                          difficulty=r[5],content=r[6],answer=r[7],options=r[8],
+                          knowledge_point=r[9],tags=r[10],source=r[11],created_at=r[12])
+                          for r in rows]
+                    exam = Exam(title=f'{config.grade_label} - {kp} 专项练习')
+                    exam.sections.append(ExamSection(title=f'{kp}专项', score_per_question=1,
+                        section_id='fill_blank', questions=qs))
+                    renderer = DocxRenderer(config)
+                    ts = datetime.now().strftime('%Y%m%d_%H%M%S')
+                    output_path = os.path.join(config.get_output_dir(), f'{kp}专项_{ts}.docx')
+                    filepath = renderer.render_with_answer(exam, output_path)
+                    return f'已生成"{kp}"专项练习卷，共{len(qs)}题（含答案）', filepath
+                finally:
+                    db3.close()
+
+            btn_kp.click(fn=on_kp_practice,
+                        inputs=[grade_dd, term_radio, kp_dropdown, kp_count],
+                        outputs=[preview, file_dl])
 
             btn_gen.click(
                 fn=on_generate,
@@ -452,6 +526,7 @@ def build_ui():
                     wrong_stats = gr.Markdown("点击刷新查看统计")
                     btn_wrong_stats = gr.Button("刷新统计", variant="secondary")
                     btn_gen_wrong = gr.Button("生成错题重练卷", variant="primary")
+                    btn_report = gr.Button("生成本周学习报告", variant="secondary")
 
             wrong_detail = gr.Dataframe(
                 headers=["ID", "题号", "错误答案", "时间", "已复习", "题目内容", "正确答案"],
@@ -540,6 +615,18 @@ def build_ui():
                            outputs=[wrong_msg, wrong_stats, wrong_detail])
             btn_gen_wrong.click(fn=on_gen_wrong_exam, inputs=[],
                                outputs=[wrong_msg, file_dl])
+            def on_gen_report():
+                db2 = DBManager(config.get_db_path())
+                try:
+                    from src.report_generator import generate_weekly_report
+                    ts = datetime.now().strftime('%Y%m%d_%H%M%S')
+                    output_path = os.path.join(config.get_output_dir(), f'学习周报_{ts}.docx')
+                    path = generate_weekly_report(db2.conn, output_path)
+                    return f"已生成学习周报", path
+                finally:
+                    db2.close()
+
+            btn_report.click(fn=on_gen_report, inputs=[], outputs=[wrong_msg, file_dl])
             btn_clear_wrong.click(fn=on_clear_wrong, inputs=[],
                                  outputs=[wrong_msg, wrong_stats, wrong_detail])
 
