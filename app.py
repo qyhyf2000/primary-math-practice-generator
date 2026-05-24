@@ -59,12 +59,21 @@ TYPE_TO_SECTION = {
 # 回调函数
 # ============================================================
 
-def on_generate(week: str, units_selected: list, section_type: str) -> tuple:
+def on_generate(grade_name: str, term_name: str, week: str,
+                units_selected: list, section_type: str) -> tuple:
     """生成试卷"""
+    # 设置年级/学期
+    grade_map = {"一年级": 1, "二年级": 2, "三年级": 3, "四年级": 4, "五年级": 5, "六年级": 6}
+    term_map = {"上册": 1, "下册": 2}
+    g = grade_map.get(grade_name, 2)
+    t = term_map.get(term_name, 2)
+    config.set_active(g, t)
+    units_map = config.get_units()
+
     # 提取单元编号
     units = []
     for label in (units_selected or []):
-        for num, name in UNIT_NAMES.items():
+        for num, name in units_map.items():
             if name == label:
                 units.append(num)
                 break
@@ -92,6 +101,8 @@ def on_generate(week: str, units_selected: list, section_type: str) -> tuple:
                 unit_filter=units,
                 section_filter=section_filter,
                 tag_filter=tag_filter,
+                grade=g,
+                term=t,
             )
 
             renderer = DocxRenderer(config)
@@ -316,12 +327,36 @@ def build_ui():
 
         gr.Markdown(
             "# 小学数学练习试卷生成系统\n"
-            f"**{config.textbook} {config.grade_name}数学{config.grade_term}** "
-            "· 周末练习题 · 约20分钟"
+            f"**{config.textbook}** · 1-6年级上下册 · 周末练习卷"
         )
 
         # ===== Tab 1: 生成试卷 =====
         with gr.Tab("生成试卷"):
+            # 年级/学期选择行
+            with gr.Row():
+                grade_dd = gr.Dropdown(
+                    choices=["一年级", "二年级", "三年级", "四年级", "五年级", "六年级"],
+                    value="二年级", label="年级"
+                )
+                term_radio = gr.Radio(
+                    choices=["上册", "下册"], value="下册", label="学期"
+                )
+                grade_info = gr.Markdown("")
+
+            def on_grade_term_change(grade_name, term_name):
+                grade_map = {"一年级": 1, "二年级": 2, "三年级": 3, "四年级": 4, "五年级": 5, "六年级": 6}
+                term_map = {"上册": 1, "下册": 2}
+                config.set_active(grade_map[grade_name], term_map[term_name])
+                units_dict = config.get_units()
+                unit_list = list(units_dict.values())
+                return (f"**{config.textbook} {config.grade_label}** · {len(unit_list)}个单元",
+                        gr.update(choices=unit_list, value=unit_list))
+
+            grade_dd.change(on_grade_term_change, inputs=[grade_dd, term_radio],
+                           outputs=[grade_info, units])
+            term_radio.change(on_grade_term_change, inputs=[grade_dd, term_radio],
+                             outputs=[grade_info, units])
+
             with gr.Row():
                 with gr.Column(scale=1):
                     section_type = gr.Dropdown(
@@ -350,7 +385,7 @@ def build_ui():
 
             btn_gen.click(
                 fn=on_generate,
-                inputs=[week, units, section_type],
+                inputs=[grade_dd, term_radio, week, units, section_type],
                 outputs=[preview, file_dl],
             )
 

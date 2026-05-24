@@ -679,6 +679,122 @@ def _gen_oral_mult_1digit(diff: int = 1) -> Question:
     )
 
 
+# ============================================================
+# 三年级下册 + 四年级专属生成器
+# ============================================================
+
+# -- 三下：两位数乘法 --
+
+def _gen_oral_2digit_mult(diff: int = 1) -> Question:
+    """两位数乘整十数口算"""
+    a = _rand(10, 50)
+    b = _rand(2, 9) * 10
+    return Question(
+        unit=1, section="oral_calc", difficulty=min(diff + 1, 3),
+        content=f"{a} × {b} =",
+        answer=str(a * b),
+        knowledge_point="两位数乘整十数", tags="口算,乘法",
+        source="generated",
+    )
+
+
+def _gen_oral_div_1digit(diff: int = 1) -> Question:
+    """除数是一位数的除法口算"""
+    b = _rand(2, 9)
+    c = _rand(10, 99)
+    a = b * c
+    return Question(
+        unit=4, section="oral_calc", difficulty=diff,
+        content=f"{a} ÷ {b} =",
+        answer=str(c),
+        knowledge_point="除数一位数除法", tags="口算,除法",
+        source="generated",
+    )
+
+
+def _gen_fb_perimeter(diff: int = 1) -> Question:
+    """周长计算填空"""
+    w = _rand(3, 15)
+    h = _rand(3, 12)
+    if _rand(0, 1):
+        p = 2 * (w + h)
+        return Question(
+            unit=3, section="fill_blank", difficulty=diff,
+            content=f"一个长方形长 {w} cm，宽 {h} cm，周长是（    ）cm。",
+            answer=str(p),
+            knowledge_point="长方形周长", tags="填空,周长",
+            source="generated",
+        )
+    else:
+        s = _rand(2, 15)
+        return Question(
+            unit=3, section="fill_blank", difficulty=diff,
+            content=f"一个正方形边长 {s} cm，周长是（    ）cm。",
+            answer=str(4 * s),
+            knowledge_point="正方形周长", tags="填空,周长",
+            source="generated",
+        )
+
+
+def _gen_fb_fraction_basic(diff: int = 1) -> Question:
+    """分数初步填空"""
+    den = _rand(2, 8)
+    num = _rand(1, den - 1)
+    return Question(
+        unit=6, section="fill_blank", difficulty=diff,
+        content=f"把一个西瓜平均分成 {den} 份，拿走其中的 {num} 份，拿走了（    ）/{den}。",
+        answer=f"（{num}）/（{den}）",
+        knowledge_point="分数的初步认识", tags="填空,分数",
+        source="generated",
+    )
+
+
+# -- 四上：大数读写 + 角度度量 --
+
+def _gen_fb_large_number(diff: int = 1) -> Question:
+    """大数读写（四上）"""
+    nums = [
+        (12345678, "一千二百三十四万五千六百七十八"),
+        (50060070, "五千零六万零七十"),
+        (100200300, "一亿零二十万零三百"),
+        (80000008, "八千万零八"),
+    ]
+    n, name = random.choice(nums)
+    if _rand(0, 1):
+        return Question(
+            unit=1, section="fill_blank", difficulty=diff,
+            content=f"{n} 读作（                      ）",
+            answer=name,
+            knowledge_point="亿以内数的读法", tags="填空,大数",
+            source="generated",
+        )
+    else:
+        return Question(
+            unit=1, section="fill_blank", difficulty=diff,
+            content=f"{name} 写作（          ）",
+            answer=str(n),
+            knowledge_point="亿以内数的写法", tags="填空,大数",
+            source="generated",
+        )
+
+
+def _gen_fb_angle_measure(diff: int = 1) -> Question:
+    """角度度量填空（四上）"""
+    items = [
+        ("1 周角 = ( ) 平角 = ( ) 直角", "2；4"),
+        ("1 平角 = ( ) 直角", "2"),
+        ("一个三角尺上最大的角是 ( ) 角，是 ( ) 度", "直；90"),
+        ("比90度大的角叫 ( ) 角，比90度小的角叫 ( ) 角", "钝；锐"),
+    ]
+    content, answer = random.choice(items)
+    return Question(
+        unit=2, section="fill_blank", difficulty=diff,
+        content=content, answer=answer,
+        knowledge_point="角的度量", tags="填空,角度",
+        source="generated",
+    )
+
+
 # -- 旧列表（已不由入口函数使用，保留兼容） --
 ORAL_GENERATORS = [
     (_gen_oral_div_table, 1),
@@ -1558,6 +1674,20 @@ def _register_all():
               lambda p: p.max_digits >= 3 and not p.supports_decimals)
     _register("oral_calc", _gen_oral_mult_1digit,
               lambda p: p.supports_multiplication and p.max_digits >= 3)
+    # -- 三下：两位数乘法 + 周长 + 分数 --
+    _register("oral_calc", _gen_oral_2digit_mult,
+              lambda p: p.supports_multiplication and p.max_digits >= 3)
+    _register("oral_calc", _gen_oral_div_1digit,
+              lambda p: p.supports_division and p.max_digits >= 3)
+    _register("fill_blank", _gen_fb_perimeter,
+              lambda p: p.supports_multiplication and p.max_digits >= 3)
+    _register("fill_blank", _gen_fb_fraction_basic,
+              lambda p: p.supports_fractions)
+    # -- 四上：大数 + 角度 --
+    _register("fill_blank", _gen_fb_large_number,
+              lambda p: p.max_digits >= 8)
+    _register("fill_blank", _gen_fb_angle_measure,
+              lambda p: p.geometry_angles and p.max_digits >= 3)
 
     # -- 口算题 --
     _register("oral_calc", _gen_oral_div_table,

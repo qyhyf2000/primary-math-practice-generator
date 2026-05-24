@@ -43,6 +43,8 @@ TYPE_MAP = {
 
 def cmd_generate(args, config: ConfigManager):
     """生成一份试卷"""
+    config.set_active(args.grade, args.term)
+
     with DBManager(config.get_db_path()) as db:
         if db.is_empty() and config.get_seed_on_empty():
             print("题库为空，正在导入内置种子数据...")
@@ -50,6 +52,19 @@ def cmd_generate(args, config: ConfigManager):
             db.insert_batch(seed_qs)
             total, _ = db.get_question_count()
             print(f"已导入 {total} 道种子题目")
+
+        # 检查当前年级/学期是否有足够的题目
+        grade_count = db.conn.execute(
+            "SELECT COUNT(*) FROM questions WHERE grade=? AND term=?",
+            (args.grade, args.term)
+        ).fetchone()[0]
+
+        if grade_count < 20:
+            print(f"当前年级({args.grade}-{args.term})题库仅{grade_count}题，自动生成补充...")
+            from src.question_bank.question_generator import generate_questions as gen_qs
+            new_qs = gen_qs(count=100, grade=args.grade, term=args.term)
+            added = db.insert_batch(new_qs)
+            print(f"已自动生成 {added} 题补充题库")
 
         # 单元过滤
         unit_filter = None
@@ -72,6 +87,8 @@ def cmd_generate(args, config: ConfigManager):
             unit_filter=unit_filter,
             section_filter=section_filter,
             tag_filter=tag_filter,
+            grade=args.grade,
+            term=args.term,
         )
 
         renderer = DocxRenderer(config)
@@ -166,6 +183,8 @@ def main():
 
     # generate
     gen = subparsers.add_parser("generate", help="生成试卷")
+    gen.add_argument("--grade", type=int, default=2, help="年级 (1-6)")
+    gen.add_argument("--term", type=int, default=2, help="学期 (1=上册, 2=下册)")
     gen.add_argument("--week", type=str, default="", help="周次标签")
     gen.add_argument("--units", type=str, default="", help="限定单元，逗号分隔（如 1,2,5）")
     gen.add_argument("--type", type=str, default="", help="限定题型（口算题/填空题/选择题/竖式/解决问题/图形题）")

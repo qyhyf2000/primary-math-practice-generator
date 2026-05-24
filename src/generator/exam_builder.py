@@ -21,18 +21,19 @@ class ExamBuilder:
         unit_filter: Optional[List[int]] = None,
         section_filter: Optional[List[str]] = None,
         tag_filter: Optional[str] = None,
+        grade: int = 2,
+        term: int = 2,
     ) -> Exam:
         """
-        构建一份试卷。
-
-        选题采用使用次数分层机制：优先选从未用过的题，不够再选用过 1 次、
-        2 次……所有题最终都会循环复用。
+        构建一份试卷。选题采用使用次数分层机制。
 
         参数：
             week_label: 周次标签
-            unit_filter: 限定单元（如 [1,2,5]），None=全范围
-            section_filter: 限定题型（如 ["oral_calc", "word_problem"]），None=全部
-            tag_filter: 按标签过滤（如 "图形"），跨题型搜索
+            unit_filter: 限定单元
+            section_filter: 限定题型
+            tag_filter: 按标签过滤
+            grade: 年级 1-6
+            term: 学期 1=上, 2=下
         """
         title = self.config.exam_title(week_label)
         exam = Exam(title=title)
@@ -53,6 +54,8 @@ class ExamBuilder:
                     difficulty_range=diff_range,
                     unit_filter=unit_filter,
                     tag_filter=tag_filter,
+                    grade=grade,
+                    term=term,
                 )
             except Exception:
                 logger.warning(
