@@ -511,6 +511,174 @@ def _gen_fb_clock_hour(diff: int = 1) -> Question:
         )
 
 
+# ============================================================
+# 二年级上册 + 三年级上册专属生成器
+# ============================================================
+
+# -- 二上：乘法口诀 --
+
+def _gen_oral_mult_table(diff: int = 1) -> Question:
+    """乘法口诀口算"""
+    a = _rand(2, 9)
+    b = _rand(1, 9)
+    return Question(
+        unit=_rand(3, 4), section="oral_calc", difficulty=diff,
+        content=f"{a} × {b} =",
+        answer=str(a * b),
+        knowledge_point=f"{min(a,b)}的乘法口诀", tags="口算,乘法",
+        source="generated",
+    )
+
+
+def _gen_oral_div_table_basic(diff: int = 1) -> Question:
+    """表内除法（乘除对应）"""
+    b = _rand(2, 9)
+    c = _rand(1, 9)
+    a = b * c
+    return Question(
+        unit=7, section="oral_calc", difficulty=diff,
+        content=f"{a} ÷ {b} =",
+        answer=str(c),
+        knowledge_point="用乘法口诀求商", tags="口算,除法",
+        source="generated",
+    )
+
+
+def _gen_oral_money(diff: int = 1) -> Question:
+    """元角分换算"""
+    items = [
+        ("1 元 = ( ) 角", "10"),
+        ("10 角 = ( ) 元", "1"),
+        ("1 角 = ( ) 分", "10"),
+        ("5 元 = ( ) 角", "50"),
+        ("30 角 = ( ) 元", "3"),
+        ("2 元 5 角 = ( ) 角", "25"),
+    ]
+    content, answer = random.choice(items)
+    return Question(
+        unit=2, section="oral_calc", difficulty=diff,
+        content=content, answer=answer,
+        knowledge_point="元角分换算", tags="口算,购物",
+        source="generated",
+    )
+
+
+def _gen_oral_cm_m(diff: int = 1) -> Question:
+    """厘米和米换算"""
+    items = [
+        ("1 米 = ( ) 厘米", "100"),
+        ("100 厘米 = ( ) 米", "1"),
+        ("2 米 = ( ) 厘米", "200"),
+        ("300 厘米 = ( ) 米", "3"),
+        ("1 米 20 厘米 = ( ) 厘米", "120"),
+    ]
+    content, answer = random.choice(items)
+    return Question(
+        unit=6, section="oral_calc", difficulty=diff,
+        content=content, answer=answer,
+        knowledge_point="厘米和米换算", tags="口算,测量",
+        source="generated",
+    )
+
+
+# -- 二上填空 --
+
+def _gen_fb_mult_meaning(diff: int = 1) -> Question:
+    """乘法意义填空"""
+    a = _rand(2, 5)
+    b = _rand(2, 6)
+    return Question(
+        unit=3, section="fill_blank", difficulty=diff,
+        content=f"{a} × {b} 表示（    ）个（    ）相加，也表示（    ）的（    ）倍。",
+        answer=f"{b}；{a}；{a}；{b}",
+        knowledge_point="乘法的意义", tags="填空,乘法",
+        source="generated",
+    )
+
+
+def _gen_fb_money_word(diff: int = 1) -> Question:
+    """购物填空"""
+    price = _rand(1, 9)
+    count = _rand(2, 5)
+    total = price * count
+    return Question(
+        unit=2, section="fill_blank", difficulty=diff,
+        content=f"每本练习本 {price} 角，买 {count} 本需要（    ）角，也就是（    ）元（    ）角。",
+        answer=f"{total}；{total // 10}；{total % 10}",
+        knowledge_point="购物计算", tags="填空,元角分",
+        source="generated",
+    )
+
+
+# -- 三上：混合运算 + 测量 + 大数估算 --
+
+def _gen_oral_mix_2step(diff: int = 1) -> Question:
+    """两步混合运算口算"""
+    a = _rand(10, 50)
+    b = _rand(2, 9)
+    c = _rand(2, 5)
+    if _rand(0, 1):
+        content = f"{a} + {b} × {c} ="
+        answer = str(a + b * c)
+    else:
+        total = a + b * c
+        content = f"{a} + ( ) × {c} = {total}"
+        answer = str(b)
+    return Question(
+        unit=1, section="oral_calc", difficulty=min(diff + 1, 3),
+        content=content, answer=answer,
+        knowledge_point="混合运算", tags="口算,混合运算",
+        source="generated",
+    )
+
+
+def _gen_oral_mm_cm_km(diff: int = 1) -> Question:
+    """毫米/厘米/分米/千米换算"""
+    items = [
+        ("1 厘米 = ( ) 毫米", "10"),
+        ("1 分米 = ( ) 厘米", "10"),
+        ("1 千米 = ( ) 米", "1000"),
+        ("5 厘米 = ( ) 毫米", "50"),
+        ("70 毫米 = ( ) 厘米", "7"),
+        ("3 千米 = ( ) 米", "3000"),
+    ]
+    content, answer = random.choice(items)
+    return Question(
+        unit=2, section="oral_calc", difficulty=diff,
+        content=content, answer=answer,
+        knowledge_point="长度单位换算", tags="口算,测量",
+        source="generated",
+    )
+
+
+def _gen_fb_estimate(diff: int = 1) -> Question:
+    """估算填空（三上）"""
+    a = _rand(200, 900)
+    b = _rand(100, 500)
+    r = round(a / 100) * 100
+    s = round(b / 100) * 100
+    return Question(
+        unit=3, section="fill_blank", difficulty=diff,
+        content=f"估算：{a} + {b} ≈ (    ) + (    ) = (    )",
+        answer=f"{r}；{s}；{r + s}",
+        knowledge_point="万以内加减估算", tags="填空,估算",
+        source="generated",
+    )
+
+
+def _gen_oral_mult_1digit(diff: int = 1) -> Question:
+    """多位数乘一位数口算（三上）"""
+    a = _rand(10, 99)
+    b = _rand(2, 9)
+    return Question(
+        unit=6, section="oral_calc", difficulty=min(diff + 1, 3),
+        content=f"{a} × {b} =",
+        answer=str(a * b),
+        knowledge_point="两位数乘一位数", tags="口算,乘法",
+        source="generated",
+    )
+
+
 # -- 旧列表（已不由入口函数使用，保留兼容） --
 ORAL_GENERATORS = [
     (_gen_oral_div_table, 1),
@@ -1365,6 +1533,31 @@ def _register_all():
               lambda p: p.max_digits <= 2)
     _register("fill_blank", _gen_fb_clock_hour,
               lambda p: True)
+
+    # -- 二上口算：乘法口诀 --
+    _register("oral_calc", _gen_oral_mult_table,
+              lambda p: p.supports_multiplication and p.times_table_max > 0
+                        and not p.supports_remainder)
+    _register("oral_calc", _gen_oral_div_table_basic,
+              lambda p: p.supports_division and p.times_table_max > 0
+                        and not p.supports_remainder)
+    _register("oral_calc", _gen_oral_money,
+              lambda p: p.supports_multiplication and p.times_table_max > 0)
+    _register("oral_calc", _gen_oral_cm_m,
+              lambda p: p.max_digits >= 2 and not p.supports_remainder)
+    _register("fill_blank", _gen_fb_mult_meaning,
+              lambda p: p.supports_multiplication and p.times_table_max > 0)
+    _register("fill_blank", _gen_fb_money_word,
+              lambda p: p.supports_multiplication and p.times_table_max > 0)
+    # -- 三上：混合运算 + 大数 + 估算 --
+    _register("oral_calc", _gen_oral_mix_2step,
+              lambda p: p.supports_multiplication and p.max_digits >= 3)
+    _register("oral_calc", _gen_oral_mm_cm_km,
+              lambda p: p.max_digits >= 3)
+    _register("fill_blank", _gen_fb_estimate,
+              lambda p: p.max_digits >= 3 and not p.supports_decimals)
+    _register("oral_calc", _gen_oral_mult_1digit,
+              lambda p: p.supports_multiplication and p.max_digits >= 3)
 
     # -- 口算题 --
     _register("oral_calc", _gen_oral_div_table,
