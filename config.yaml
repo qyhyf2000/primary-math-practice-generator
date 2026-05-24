@@ -205,9 +205,25 @@ question_bank:
     use_builtin_urls: true
     scraper_url: ""
     scraper_urls:
-      - "https://www.51test.net/show/2968915.html"
-      - "https://www.51test.net/show/11231919.html"
-      - "https://www.51test.net/show/9699960.html"
+      # 按年级标注，抓取时自动归类
+      # 一年级
+      - {url: "https://www.51test.net/show/4479150.html", grade: 1, term: 1}
+      - {url: "https://www.51test.net/show/7071405.html", grade: 1, term: 2}
+      - {url: "https://www.51test.net/show/3123664.html", grade: 1, term: 2}
+      # 二年级
+      - {url: "https://www.51test.net/show/11011779.html", grade: 2, term: 1}
+      - {url: "https://www.51test.net/show/2968915.html", grade: 2, term: 2}
+      - {url: "https://www.51test.net/show/11231919.html", grade: 2, term: 2}
+      # 三年级
+      - {url: "https://www.51test.net/show/11258648.html", grade: 3, term: 2}
+      - {url: "https://www.51test.net/show/11164346.html", grade: 3, term: 1}
+      # 四年级
+      - {url: "https://www.51test.net/show/11011700.html", grade: 4, term: 1}
+      - {url: "https://www.51test.net/show/11013282.html", grade: 4, term: 1}
+      # 五年级
+      - {url: "https://www.51test.net/show/11013300.html", grade: 5, term: 1}
+      # 六年级
+      - {url: "https://www.51test.net/show/11013316.html", grade: 6, term: 1}
     url: ""
     api_key: ""
     interval_hours: 0

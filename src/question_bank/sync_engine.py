@@ -104,60 +104,62 @@ class SyncEngine:
     # 来源2：网络抓取
     # ================================================================
 
-    def _scrape_urls(self) -> dict:
-        """从配置的URL列表抓取题目"""
+    def _scrape_urls(self, grade_filter: int = None, term_filter: int = None) -> dict:
+        """从配置的URL列表抓取题目，支持 grade/term 标注的 URL"""
         from .scrapers import scrape_urls, KNOWN_51TEST_URLS
 
-        # 收集所有要抓取的URL
-        urls = []
+        # 收集要抓取的URL及关联的 grade/term
+        url_entries = []
 
-        # 配置中的单个URL
-        scraper_url = self.sync_config.get("scraper_url", "")
-        if scraper_url:
-            urls.append(scraper_url)
-
-        # 配置中的URL列表
         scraper_urls = self.sync_config.get("scraper_urls", [])
-        if isinstance(scraper_urls, list):
-            urls.extend(scraper_urls)
-        elif isinstance(scraper_urls, str) and scraper_urls:
-            urls.append(scraper_urls)
+        for entry in scraper_urls:
+            if isinstance(entry, dict):
+                g = entry.get("grade", 2)
+                t = entry.get("term", 2)
+                if grade_filter and g != grade_filter:
+                    continue
+                if term_filter and t != term_filter:
+                    continue
+                url_entries.append((entry["url"], g, t))
+            elif isinstance(entry, str):
+                url_entries.append((entry, 2, 2))
 
-        # 如果配置允许使用内置URL
-        if self.sync_config.get("use_builtin_urls", False):
-            urls.extend(KNOWN_51TEST_URLS)
-
-        if not urls:
+        if not url_entries:
             return {"added": 0, "skipped": 0, "error": None}
-
-        try:
-            raw_questions = scrape_urls(urls)
-        except Exception as e:
-            logger.warning(f"抓取失败: {e}")
-            return {"added": 0, "skipped": 0, "error": str(e)}
 
         added = 0
         skipped = 0
-        for item in raw_questions:
-            content = item.get("content", "")
-            if not content or self.db.content_exists(content):
-                skipped += 1
+        errors = []
+
+        for url, g, t in url_entries:
+            try:
+                raw = scrape_urls([url])
+            except Exception as e:
+                errors.append(f"{url[-30:]}: {e}")
                 continue
 
-            q = Question(
-                unit=item.get("unit", 0),
-                section=item.get("section", "oral_calc"),
-                difficulty=item.get("difficulty", 1),
-                content=content,
-                answer=item.get("answer", ""),
-                knowledge_point=item.get("knowledge_point", ""),
-                tags=item.get("tags", f"抓取,{item.get('source_url', '')}"),
-                source="scraped",
-            )
-            self.db.insert_question(q)
-            added += 1
+            for item in raw:
+                content = item.get("content", "")
+                if not content or self.db.content_exists(content):
+                    skipped += 1
+                    continue
 
-        return {"added": added, "skipped": skipped, "error": None}
+                q = Question(
+                    grade=g, term=t,
+                    unit=item.get("unit", 0),
+                    section=item.get("section", "oral_calc"),
+                    difficulty=item.get("difficulty", 1),
+                    content=content,
+                    answer=item.get("answer", ""),
+                    knowledge_point=item.get("knowledge_point", ""),
+                    tags=item.get("tags", f"抓取,{url[-40:]}"),
+                    source="scraped",
+                )
+                self.db.insert_question(q)
+                added += 1
+
+        err_msg = "; ".join(errors[:3]) if errors else None
+        return {"added": added, "skipped": skipped, "error": err_msg}
 
     # ================================================================
     # 来源3：远程 API
