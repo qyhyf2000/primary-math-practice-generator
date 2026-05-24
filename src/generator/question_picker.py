@@ -21,18 +21,15 @@ class QuestionPicker:
         difficulty_range: Tuple[int, int],
         unit_filter: Optional[List[int]] = None,
         tag_filter: Optional[str] = None,
+        grade: int = 2,
+        term: int = 2,
     ) -> List[Question]:
-        """
-        按使用次数分层 + 难度分层随机抽取题目。
-
-        优先选从未用过的题（tier 0），不够再选 tier 1、tier 2……
-        同一 tier 内随机。所有题都会循环复用。
-        """
+        """按使用次数分层 + 难度分层随机抽取题目。"""
         lo, hi = difficulty_range
 
         if hi <= lo:
             return self._pick_by_tier(
-                section_id, count, lo, hi, unit_filter, tag_filter
+                section_id, count, lo, hi, unit_filter, tag_filter, grade, term
             )
 
         mid = (lo + hi) // 2
@@ -44,24 +41,24 @@ class QuestionPicker:
         picked_ids: set = set()
 
         low_qs = self._pick_by_tier(
-            section_id, low_count, lo, mid, unit_filter, tag_filter
+            section_id, low_count, lo, mid, unit_filter, tag_filter, grade, term
         )
         self._add_unique(results, low_qs, picked_ids)
 
         high_qs = self._pick_by_tier(
-            section_id, high_count, mid + 1, hi, unit_filter, tag_filter
+            section_id, high_count, mid + 1, hi, unit_filter, tag_filter, grade, term
         )
         self._add_unique(results, high_qs, picked_ids)
 
         flex_qs = self._pick_by_tier(
-            section_id, flex_count, lo, hi, unit_filter, tag_filter
+            section_id, flex_count, lo, hi, unit_filter, tag_filter, grade, term
         )
         self._add_unique(results, flex_qs, picked_ids)
 
         if len(results) < count:
             remaining = count - len(results)
             more_qs = self._pick_by_tier(
-                section_id, remaining, lo, hi, unit_filter, tag_filter
+                section_id, remaining, lo, hi, unit_filter, tag_filter, grade, term
             )
             self._add_unique(results, more_qs, picked_ids)
 
@@ -76,6 +73,8 @@ class QuestionPicker:
         difficulty_max: int,
         unit_filter: Optional[List[int]] = None,
         tag_filter: Optional[str] = None,
+        grade: int = 2,
+        term: int = 2,
     ) -> List[Question]:
         """按使用次数层级从低到高选取题目"""
         candidates = self.db.get_questions_by_tier(
@@ -85,6 +84,8 @@ class QuestionPicker:
             limit=max(count * 5, 50),
             unit_filter=unit_filter,
             tag_filter=tag_filter,
+            grade=grade,
+            term=term,
         )
 
         # 按 tier 分组

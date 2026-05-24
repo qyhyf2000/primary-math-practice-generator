@@ -7,11 +7,13 @@ import json
 @dataclass
 class Question:
     """题目数据模型"""
-    unit: int
+    unit: int               # 年级内单元编号
     section: str
     difficulty: int
     content: str
     answer: str
+    grade: int = 2          # 年级 1-6
+    term: int = 2           # 学期 1=上册, 2=下册
     id: Optional[int] = None
     options: Optional[str] = None
     knowledge_point: str = ""

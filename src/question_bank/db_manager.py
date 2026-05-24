@@ -6,10 +6,10 @@ from typing import List, Optional, Tuple
 from .models import Question
 
 
-DB_SCHEMA = """
+DB_SCHEMA_BASE = """
 CREATE TABLE IF NOT EXISTS questions (
     id              INTEGER PRIMARY KEY AUTOINCREMENT,
-    unit            INTEGER NOT NULL CHECK(unit BETWEEN 1 AND 12),
+    unit            INTEGER NOT NULL CHECK(unit >= 1),
     section         TEXT NOT NULL,
     difficulty      INTEGER NOT NULL CHECK(difficulty BETWEEN 1 AND 5),
     content         TEXT NOT NULL,
@@ -21,12 +21,6 @@ CREATE TABLE IF NOT EXISTS questions (
     content_hash    TEXT NOT NULL UNIQUE,
     created_at      TEXT DEFAULT (datetime('now','localtime'))
 );
-
-CREATE INDEX IF NOT EXISTS idx_section_diff
-    ON questions(section, difficulty, unit);
-
-CREATE INDEX IF NOT EXISTS idx_unit
-    ON questions(unit);
 
 CREATE TABLE IF NOT EXISTS exam_history (
     id          INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -43,6 +37,19 @@ CREATE INDEX IF NOT EXISTS idx_exam_history_date
     ON exam_history(used_at);
 """
 
+MIGRATIONS = [
+    # v1→v2: 添加年级/学期列
+    """ALTER TABLE questions ADD COLUMN grade INTEGER NOT NULL DEFAULT 2""",
+    """ALTER TABLE questions ADD COLUMN term INTEGER NOT NULL DEFAULT 2""",
+]
+
+DB_INDEXES_V2 = [
+    """CREATE INDEX IF NOT EXISTS idx_grade_term_section
+       ON questions(grade, term, section, difficulty, unit)""",
+    """CREATE INDEX IF NOT EXISTS idx_grade_term_unit
+       ON questions(grade, term, unit)""",
+]
+
 
 class DBManager:
     def __init__(self, db_path: str):
@@ -53,8 +60,31 @@ class DBManager:
         self._init_schema()
 
     def _init_schema(self):
-        self.conn.executescript(DB_SCHEMA)
+        # 1. 基础表
+        self.conn.executescript(DB_SCHEMA_BASE)
+        # 2. 迁移：给旧库加 grade/term 列
+        self._migrate()
+        # 3. v2 索引（依赖 grade/term 列已存在）
+        self._ensure_indexes()
         self.conn.commit()
+
+    def _migrate(self):
+        """检测并执行 schema 升级（幂等）"""
+        cols = [r[1] for r in self.conn.execute(
+            "PRAGMA table_info(questions)").fetchall()]
+        if "grade" not in cols:
+            for sql in MIGRATIONS:
+                try:
+                    self.conn.execute(sql)
+                except sqlite3.OperationalError:
+                    pass
+
+    def _ensure_indexes(self):
+        for sql in DB_INDEXES_V2:
+            try:
+                self.conn.execute(sql)
+            except sqlite3.OperationalError:
+                pass
 
     @staticmethod
     def _hash_content(content: str) -> str:
@@ -66,26 +96,27 @@ class DBManager:
         q.content_hash = self._hash_content(q.content)
         cur = self.conn.execute("""
             INSERT OR IGNORE INTO questions
-                (unit, section, difficulty, content, answer, options,
-                 knowledge_point, tags, source, content_hash)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        """, (q.unit, q.section, q.difficulty, q.content, q.answer,
-              q.options, q.knowledge_point, q.tags, q.source, q.content_hash))
+                (grade, term, unit, section, difficulty, content, answer,
+                 options, knowledge_point, tags, source, content_hash)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, (q.grade, q.term, q.unit, q.section, q.difficulty, q.content,
+              q.answer, q.options, q.knowledge_point, q.tags, q.source,
+              q.content_hash))
         self.conn.commit()
         return cur.lastrowid
 
     def insert_batch(self, questions: List[Question]) -> int:
-        count = 0
         data = []
         for q in questions:
             h = self._hash_content(q.content)
-            data.append((q.unit, q.section, q.difficulty, q.content, q.answer,
-                         q.options, q.knowledge_point, q.tags, q.source, h))
+            data.append((q.grade, q.term, q.unit, q.section, q.difficulty,
+                         q.content, q.answer, q.options, q.knowledge_point,
+                         q.tags, q.source, h))
         cur = self.conn.executemany("""
             INSERT OR IGNORE INTO questions
-                (unit, section, difficulty, content, answer, options,
-                 knowledge_point, tags, source, content_hash)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                (grade, term, unit, section, difficulty, content, answer,
+                 options, knowledge_point, tags, source, content_hash)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """, data)
         self.conn.commit()
         return cur.rowcount
@@ -101,15 +132,18 @@ class DBManager:
         exclude_ids: Optional[List[int]] = None,
         unit_filter: Optional[List[int]] = None,
         tag_filter: Optional[str] = None,
+        grade: int = 2,
+        term: int = 2,
     ) -> List[Question]:
         sql = """
-            SELECT id, unit, section, difficulty, content, answer, options,
-                   knowledge_point, tags, source, created_at
+            SELECT id, grade, term, unit, section, difficulty, content, answer,
+                   options, knowledge_point, tags, source, created_at
             FROM questions
-            WHERE section = ?
+            WHERE grade = ? AND term = ?
+              AND section = ?
               AND difficulty BETWEEN ? AND ?
         """
-        params = [section, difficulty_min, difficulty_max]
+        params: list = [grade, term, section, difficulty_min, difficulty_max]
 
         if exclude_ids:
             placeholders = ",".join("?" * len(exclude_ids))
@@ -133,10 +167,10 @@ class DBManager:
 
     def _row_to_question(self, row) -> Question:
         return Question(
-            id=row[0], unit=row[1], section=row[2], difficulty=row[3],
-            content=row[4], answer=row[5], options=row[6],
-            knowledge_point=row[7], tags=row[8], source=row[9],
-            created_at=row[10],
+            id=row[0], grade=row[1], term=row[2], unit=row[3],
+            section=row[4], difficulty=row[5], content=row[6],
+            answer=row[7], options=row[8], knowledge_point=row[9],
+            tags=row[10], source=row[11], created_at=row[12],
         )
 
     def get_question_count(self) -> Tuple[int, dict]:
@@ -174,13 +208,14 @@ class DBManager:
         limit: int = 100,
         unit_filter: Optional[List[int]] = None,
         tag_filter: Optional[str] = None,
+        grade: int = 2,
+        term: int = 2,
     ) -> List[Tuple[Question, int]]:
-        """返回 (题目, 使用次数)，按使用次数（tier）升序排列。
-        tier=0 表示从未被使用过，优先级最高。
-        """
+        """返回 (题目, 使用次数)，按使用次数（tier）升序排列。"""
         sql = """
-            SELECT q.id, q.unit, q.section, q.difficulty, q.content, q.answer,
-                   q.options, q.knowledge_point, q.tags, q.source, q.created_at,
+            SELECT q.id, q.grade, q.term, q.unit, q.section, q.difficulty,
+                   q.content, q.answer, q.options, q.knowledge_point, q.tags,
+                   q.source, q.created_at,
                    COALESCE(eh.use_count, 0) AS tier
             FROM questions q
             LEFT JOIN (
@@ -188,9 +223,10 @@ class DBManager:
                 FROM exam_history
                 GROUP BY question_id
             ) eh ON q.id = eh.question_id
-            WHERE q.section = ? AND q.difficulty BETWEEN ? AND ?
+            WHERE q.grade = ? AND q.term = ?
+              AND q.section = ? AND q.difficulty BETWEEN ? AND ?
         """
-        params: list = [section, difficulty_min, difficulty_max]
+        params: list = [grade, term, section, difficulty_min, difficulty_max]
 
         if unit_filter:
             placeholders = ",".join("?" * len(unit_filter))
