@@ -9,6 +9,7 @@
     python main.py generate --output 自定义名称  # 自定义文件名
     python main.py status                # 查看题库统计
     python main.py seed --reload         # 重置并重新导入种子数据
+    python main.py seed --all-grades     # 批量生成1-6年级全12学期题库
     python main.py sync                  # 手动触发在线同步
 """
 import argparse
@@ -120,6 +121,8 @@ def cmd_status(args, config: ConfigManager):
 
 def cmd_seed(args, config: ConfigManager):
     """管理种子数据"""
+    from src.question_bank.question_generator import generate_questions as gen_qs
+
     with DBManager(config.get_db_path()) as db:
         if args.reload:
             print("重置题库...")
@@ -128,6 +131,31 @@ def cmd_seed(args, config: ConfigManager):
             db.insert_batch(seed_qs)
             total, _ = db.get_question_count()
             print(f"已重新导入 {total} 道种子题目")
+
+        if args.all_grades:
+            print("批量生成全12学期题库（每学期每题型40题）...")
+            total_added = 0
+            for g in range(1, 7):
+                for t in [1, 2]:
+                    config.set_active(g, t)
+                    grade_count = db.conn.execute(
+                        "SELECT COUNT(*) FROM questions WHERE grade=? AND term=?",
+                        (g, t)
+                    ).fetchone()[0]
+                    if grade_count >= 150:
+                        print(f"  G{g}T{t} {config.grade_label}: 已有{grade_count}题，跳过")
+                        continue
+                    added = 0
+                    for sec in ["oral_calc", "fill_blank", "choice", "vertical_calc", "word_problem"]:
+                        qs = gen_qs(count=40, sections=[sec], grade=g, term=t)
+                        if qs:
+                            db.insert_batch(qs)
+                            added += len(qs)
+                    print(f"  G{g}T{t} {config.grade_label}: +{added}题")
+                    total_added += added
+            print(f"\n全部完成，共新增 {total_added} 题")
+            total, _ = db.get_question_count()
+            print(f"题库总题数: {total}")
 
 
 def cmd_sync(args, config: ConfigManager):
@@ -183,6 +211,7 @@ def main():
     # seed
     seed = subparsers.add_parser("seed", help="题库种子管理")
     seed.add_argument("--reload", action="store_true", help="重置并重新导入种子数据")
+    seed.add_argument("--all-grades", action="store_true", help="为全部12个学期批量生成题库")
 
     # sync
     subparsers.add_parser("sync", help="手动触发在线同步")
