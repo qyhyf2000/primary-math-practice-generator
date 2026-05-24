@@ -10,6 +10,7 @@
     python main.py status                # 查看题库统计
     python main.py seed --reload         # 重置并重新导入种子数据
     python main.py seed --all-grades     # 批量生成1-6年级全12学期题库
+    python main.py learn <URL> --grade 3 # 从网页学习题目结构并生成变形题
     python main.py sync                  # 手动触发在线同步
 """
 import argparse
@@ -216,6 +217,13 @@ def main():
     # sync
     subparsers.add_parser("sync", help="手动触发在线同步")
 
+    # learn
+    learn = subparsers.add_parser("learn", help="从网页学习题目结构，生成变形题")
+    learn.add_argument("url", type=str, help="网页 URL")
+    learn.add_argument("--grade", type=int, default=2, help="目标年级 (1-6)")
+    learn.add_argument("--term", type=int, default=2, help="学期 (1=上, 2=下)")
+    learn.add_argument("--count", type=int, default=5, help="每个模板生成的变体数量")
+
     # ui
     subparsers.add_parser("ui", help="启动图形化界面（Web UI）")
 
@@ -239,8 +247,30 @@ def main():
         "status": cmd_status,
         "seed": cmd_seed,
         "sync": cmd_sync,
+        "learn": cmd_learn,
     }
     commands[args.command](args, config)
+
+
+def cmd_learn(args, config: ConfigManager):
+    """从网页学习题目结构，生成变形题"""
+    from src.question_bank.scrapers import learn_and_generate
+    config.set_active(args.grade, args.term)
+    print(f"正在从 {args.url[-50:]} 学习题目结构...")
+    with DBManager(config.get_db_path()) as db:
+        qs = learn_and_generate(args.url, grade=args.grade, term=args.term,
+                                per_template=args.count)
+        if not qs:
+            print("未提取到有效题目模板")
+            return
+        added = db.insert_batch(qs)
+        total, _ = db.get_question_count()
+        print(f"提取 {len(qs)} 个模板变体，入库 {added} 题（去重后）")
+        print(f"当前年级题库: G{args.grade}T{args.term}")
+        # 展示几个样例
+        for q in qs[:5]:
+            print(f"  [{q.section}] {q.content[:60]}")
+        print(f"题库总题数: {total}")
 
 
 if __name__ == "__main__":

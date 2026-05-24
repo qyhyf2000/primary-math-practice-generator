@@ -9,6 +9,7 @@
 import re
 import json
 import time
+import random
 import logging
 from typing import List, Optional, Dict
 from urllib.parse import urlparse
@@ -703,3 +704,165 @@ def quick_test_scrape(url: str) -> dict:
         result["status"] = "error"
         result["error"] = str(e)
     return result
+
+
+# ============================================================
+# 模板提取 + 变形生成（从网页学习题目结构，生成变体）
+# ============================================================
+
+def extract_template(text: str) -> Optional[Dict]:
+    """
+    从一段题目文本中提取可参数化的模板。
+
+    识别文本中的数字并替换为占位符，保留语言结构。
+    返回 {"template": str, "params": dict, "answer_template": str}
+    或 None（文本不适合做模板）。
+    """
+    text = _strip_answer_content(text.strip())
+    if len(text) < 8 or len(text) > 150:
+        return None
+    if not _is_valid_math_question(text):
+        return None
+
+    # 将数字替换为参数占位符 {n0}, {n1}, ...
+    params = {}
+    counter = [0]
+
+    def replace_num(m):
+        val = int(m.group())
+        key = f"n{counter[0]}"
+        params[key] = val
+        counter[0] += 1
+        return f"{{{key}}}"
+
+    # 只替换独立的数字（不在中文词中的）
+    template = re.sub(r'(?<![一-鿿\d])\d+(?![一-鿿\d\.\d])', replace_num, text)
+
+    # 至少要有 1 个数字参数
+    if not params:
+        return None
+
+    return {
+        "template": template,
+        "params": params,
+        "original": text,
+    }
+
+
+def generate_variation(template_info: Dict, grade: int = 2, term: int = 2) -> Optional[str]:
+    """
+    基于模板生成一个变形题（替换数字参数）。
+
+    根据年级调整参数范围：
+      G1-G2: 数字范围 1-20
+      G3-G4: 数字范围 1-999
+      G5-G6: 数字范围 1-9999，可含小数
+    """
+    tpl = template_info["template"]
+    params = template_info["params"]
+
+    if grade <= 2:
+        new_params = {k: random.randint(1, min(20, v * 2))
+                      for k, v in params.items()}
+    elif grade <= 4:
+        new_params = {k: random.randint(max(1, v // 2), min(999, v * 2))
+                      for k, v in params.items()}
+    else:
+        new_params = {}
+        for k, v in params.items():
+            if random.random() < 0.3:
+                new_params[k] = round(random.uniform(0.5, min(9999, v * 2)), 1)
+            else:
+                new_params[k] = random.randint(max(1, v // 2), min(9999, v * 2))
+
+    try:
+        return tpl.format(**new_params)
+    except (KeyError, ValueError):
+        return None
+
+
+def scrape_templates(url: str) -> List[Dict]:
+    """
+    从 URL 抓取并提取题目模板（不取答案，只学结构）。
+
+    返回模板列表，每个含 template/preview/grade 信息。
+    """
+    text = fetch_page(url)
+    cleaned = _clean_html(text)
+
+    # 按行分割，每行尝试提取模板
+    lines = cleaned.split('\n')
+    templates = []
+    seen = set()
+
+    for line in lines:
+        line = line.strip()
+        if len(line) < 8:
+            continue
+
+        tmpl = extract_template(line)
+        if tmpl and tmpl["template"] not in seen:
+            seen.add(tmpl["template"])
+            templates.append(tmpl)
+
+    return templates
+
+
+def learn_and_generate(url: str, grade: int = 2, term: int = 2,
+                       per_template: int = 3) -> List[Question]:
+    """
+    从 URL 学习题目结构，生成干净的变形题。
+
+    流程：抓取页面 → 提取模板 → 每模板生成 N 个变体 → 返回 Question 列表。
+    """
+    text = fetch_page(url)
+    cleaned = _clean_html(text)
+
+    # 尝试分离答案区域
+    answer_text = _extract_answer_section(text)
+    if answer_text:
+        # 有答案区域 → 尝试去掉答案后的纯题目部分
+        main_content = text
+        for tag in ['参考答案', '答案与解析', '答案解析']:
+            idx = main_content.find(tag)
+            if idx > 0:
+                main_content = main_content[:idx]
+                break
+        cleaned = _clean_html(main_content)
+
+    lines = cleaned.split('\n')
+    templates = []
+    seen = set()
+
+    for line in lines:
+        tmpl = extract_template(line.strip())
+        if tmpl and tmpl["template"] not in seen:
+            seen.add(tmpl["template"])
+            templates.append(tmpl)
+
+    questions = []
+    for tmpl in templates[:20]:  # 最多取 20 个模板
+        for _ in range(per_template):
+            content = generate_variation(tmpl, grade, term)
+            if content and _is_valid_math_question(content):
+                # 根据内容判断题型
+                section = "oral_calc"
+                difficulty = 1
+                if "?" in content or "？" in content or len(content) > 20:
+                    section = "word_problem"
+                    difficulty = 3
+                elif re.search(r'[（(]\s*[）)]', content):
+                    section = "fill_blank"
+                    difficulty = 1
+
+                q = Question(
+                    grade=grade, term=term, unit=0,
+                    section=section, difficulty=difficulty,
+                    content=content, answer="",
+                    knowledge_point="网络学习生成",
+                    tags=f"learned,{url[-40:]}",
+                    source="generated",
+                )
+                questions.append(q)
+
+    return questions
