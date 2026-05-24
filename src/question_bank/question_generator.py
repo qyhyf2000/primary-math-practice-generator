@@ -129,8 +129,8 @@ def get_profile(grade: int = 2, term: int = 2) -> GradeProfile:
 
 def _gen_oral_div_table(diff: int = 1) -> Question:
     """表内除法口算"""
-    b = _rand(*RANGES["divisor"])
-    c = _rand(*RANGES["quotient"])
+    b = _rand(2, 9)
+    c = _rand(2, 9)
     a = b * c
     return Question(
         unit=1, section="oral_calc", difficulty=diff,
@@ -238,7 +238,7 @@ def _gen_oral_length(diff: int = 1) -> Question:
 
 def _gen_oral_3digit_add(diff: int = 1) -> Question:
     """三位数加法口算"""
-    a = _rand(*RANGES["add_3digit"])
+    a = _rand(100, 999)
     b = _rand(100, 600)
     carry = (a % 10 + b % 10 >= 10) if diff >= 2 else True
     if carry and diff >= 2:
@@ -287,6 +287,231 @@ def _gen_oral_time(diff: int = 1) -> Question:
     )
 
 
+# ============================================================
+# 一年级专属生成器
+# ============================================================
+
+def _gen_oral_add_1digit(diff: int = 1) -> Question:
+    """10以内加法"""
+    a = _rand(1, 9)
+    b = _rand(1, 10 - a)
+    return Question(
+        unit=_rand(1, 3), section="oral_calc", difficulty=diff,
+        content=f"{a} + {b} =",
+        answer=str(a + b),
+        knowledge_point="10以内加法", tags="口算,加法",
+        source="generated",
+    )
+
+
+def _gen_oral_sub_1digit(diff: int = 1) -> Question:
+    """10以内减法"""
+    a = _rand(3, 10)
+    b = _rand(1, a)
+    return Question(
+        unit=_rand(1, 3), section="oral_calc", difficulty=diff,
+        content=f"{a} - {b} =",
+        answer=str(a - b),
+        knowledge_point="10以内减法", tags="口算,减法",
+        source="generated",
+    )
+
+
+def _gen_oral_add_carry(diff: int = 1) -> Question:
+    """20以内进位加法（凑十法）"""
+    a = _rand(7, 9)
+    b = _rand(3, 9)
+    return Question(
+        unit=7, section="oral_calc", difficulty=min(diff + 1, 3),
+        content=f"{a} + {b} =",
+        answer=str(a + b),
+        knowledge_point="20以内进位加法", tags="口算,进位",
+        source="generated",
+    )
+
+
+def _gen_oral_sub_borrow(diff: int = 1) -> Question:
+    """20以内退位减法（破十法）"""
+    a = _rand(11, 18)
+    b = _rand(2, 9)
+    if a - b < 0:
+        a, b = b + _rand(1, 5), _rand(1, 5)
+    return Question(
+        unit=7, section="oral_calc", difficulty=min(diff + 1, 3),
+        content=f"{a} - {b} =",
+        answer=str(a - b),
+        knowledge_point="20以内退位减法", tags="口算,退位",
+        source="generated",
+    )
+
+
+def _gen_oral_2digit_add_1digit(diff: int = 1) -> Question:
+    """两位数加一位数（不进位）"""
+    a = _rand(10, 80)
+    b = _rand(1, min(9, 99 - a))
+    return Question(
+        unit=5, section="oral_calc", difficulty=diff,
+        content=f"{a} + {b} =",
+        answer=str(a + b),
+        knowledge_point="两位数加一位数", tags="口算,加法",
+        source="generated",
+    )
+
+
+def _gen_oral_2digit_sub_1digit(diff: int = 1) -> Question:
+    """两位数减一位数"""
+    a = _rand(11, 99)
+    b = _rand(1, min(9, a - 1))
+    return Question(
+        unit=5, section="oral_calc", difficulty=diff,
+        content=f"{a} - {b} =",
+        answer=str(a - b),
+        knowledge_point="两位数减一位数", tags="口算,减法",
+        source="generated",
+    )
+
+
+def _gen_oral_round_add(diff: int = 1) -> Question:
+    """整十数加减"""
+    a = _rand(1, 9) * 10
+    b = _rand(1, 9) * 10
+    if _rand(0, 1):
+        content, answer = f"{a} + {b} =", str(a + b)
+        kp = "整十数加法"
+    else:
+        if a < b:
+            a, b = b, a
+        content, answer = f"{a} - {b} =", str(a - b)
+        kp = "整十数减法"
+    return Question(
+        unit=5, section="oral_calc", difficulty=diff,
+        content=content, answer=answer,
+        knowledge_point=kp, tags="口算,整十数",
+        source="generated",
+    )
+
+
+# -- 一年级填空生成器 --
+
+def _gen_fb_num_sequence(diff: int = 1) -> Question:
+    """按规律填数"""
+    start = _rand(1, 20)
+    step = _rand(1, 3)
+    seq = [start + step * i for i in range(5)]
+    blank_idx = _rand(1, 3)
+    answer = str(seq[blank_idx])
+    seq[blank_idx] = "（  ）"
+    return Question(
+        unit=_rand(1, 4), section="fill_blank", difficulty=diff,
+        content="、".join(str(x) for x in seq),
+        answer=answer,
+        knowledge_point="数的顺序", tags="填空,规律",
+        source="generated",
+    )
+
+
+def _gen_fb_compare_num(diff: int = 1) -> Question:
+    """比较数的大小（填入 > < =）"""
+    a = _rand(1, 99)
+    b = _rand(1, 99)
+    cmp = ">" if a > b else ("<" if a < b else "=")
+    return Question(
+        unit=_rand(1, 4), section="fill_blank", difficulty=diff,
+        content=f"{a} ○ {b}",
+        answer=cmp,
+        knowledge_point="比较大小", tags="填空,比较",
+        source="generated",
+    )
+
+
+def _gen_fb_number_name(diff: int = 1) -> Question:
+    """数的读写"""
+    nums = [
+        (15, "十五"), (23, "二十三"), (38, "三十八"),
+        (50, "五十"), (67, "六十七"), (84, "八十四"),
+        (91, "九十一"), (100, "一百"),
+    ]
+    n, name = random.choice(nums)
+    if _rand(0, 1):
+        return Question(
+            unit=4, section="fill_blank", difficulty=diff,
+            content=f"{n} 读作（    ）",
+            answer=name,
+            knowledge_point="数的读写", tags="填空,读数",
+            source="generated",
+        )
+    else:
+        return Question(
+            unit=4, section="fill_blank", difficulty=diff,
+            content=f"{name} 写作（    ）",
+            answer=str(n),
+            knowledge_point="数的读写", tags="填空,写数",
+            source="generated",
+        )
+
+
+def _gen_fb_shape_name(diff: int = 1) -> Question:
+    """图形辨认填空"""
+    shapes = [
+        ("长方体", "立体图形"),
+        ("正方体", "立体图形"),
+        ("圆柱", "立体图形"),
+        ("球", "立体图形"),
+        ("长方形", "平面图形"),
+        ("正方形", "平面图形"),
+        ("三角形", "平面图形"),
+        ("圆", "平面图形"),
+    ]
+    shape_name, category = random.choice(shapes)
+    return Question(
+        unit=6, section="fill_blank", difficulty=diff,
+        content=f"写出下面图形的名称：{shape_name}是（    ）",
+        answer=shape_name,
+        knowledge_point="图形辨认", tags="填空,图形",
+        source="generated",
+    )
+
+
+def _gen_fb_position(diff: int = 1) -> Question:
+    """位置关系填空"""
+    items = [
+        ("苹果在桌子的（    ）面", "上"),
+        ("小猫在桌子的（    ）面", "下"),
+        ("小明的前面是黑板，小明在教室的（    ）面", "后"),
+        ("小红在小明的左边，小明在小红的（    ）边", "右"),
+    ]
+    content, answer = random.choice(items)
+    return Question(
+        unit=5, section="fill_blank", difficulty=diff,
+        content=content, answer=answer,
+        knowledge_point="位置关系", tags="填空,位置",
+        source="generated",
+    )
+
+
+def _gen_fb_clock_hour(diff: int = 1) -> Question:
+    """钟表整时/半时填空"""
+    hours = list(range(1, 13))
+    h = random.choice(hours)
+    if _rand(0, 1):
+        return Question(
+            unit=8, section="fill_blank", difficulty=diff,
+            content=f"钟面上，时针指向{h}，分针指向12，是（    ）时。",
+            answer=f"{h}时",
+            knowledge_point="认识整时", tags="填空,钟表",
+            source="generated",
+        )
+    else:
+        return Question(
+            unit=8, section="fill_blank", difficulty=diff,
+            content=f"钟面上，时针指向{h}和{h+1 if h < 12 else 1}之间，分针指向6，是（    ）时半。",
+            answer=f"{h}时半",
+            knowledge_point="认识半时", tags="填空,钟表",
+            source="generated",
+        )
+
+
+# -- 旧列表（已不由入口函数使用，保留兼容） --
 ORAL_GENERATORS = [
     (_gen_oral_div_table, 1),
     (_gen_oral_div_table, 2),
@@ -1112,6 +1337,35 @@ def _register(section: str, fn: Callable, condition: Callable[[GradeProfile], bo
 
 def _register_all():
     """注册所有生成器（在模块加载时调用）"""
+    # -- 一年级口算 --
+    _register("oral_calc", _gen_oral_add_1digit,
+              lambda p: p.max_number <= 20)
+    _register("oral_calc", _gen_oral_sub_1digit,
+              lambda p: p.max_number <= 20)
+    _register("oral_calc", _gen_oral_add_carry,
+              lambda p: p.max_number <= 20)
+    _register("oral_calc", _gen_oral_sub_borrow,
+              lambda p: p.max_number <= 20)
+    _register("oral_calc", _gen_oral_2digit_add_1digit,
+              lambda p: p.max_digits >= 2 and not p.supports_multiplication)
+    _register("oral_calc", _gen_oral_2digit_sub_1digit,
+              lambda p: p.max_digits >= 2 and not p.supports_multiplication)
+    _register("oral_calc", _gen_oral_round_add,
+              lambda p: p.max_digits >= 2)
+    # -- 一年级填空 --
+    _register("fill_blank", _gen_fb_num_sequence,
+              lambda p: p.max_digits <= 2)
+    _register("fill_blank", _gen_fb_compare_num,
+              lambda p: True)  # 全年级适用
+    _register("fill_blank", _gen_fb_number_name,
+              lambda p: p.max_digits <= 2)
+    _register("fill_blank", _gen_fb_shape_name,
+              lambda p: True)
+    _register("fill_blank", _gen_fb_position,
+              lambda p: p.max_digits <= 2)
+    _register("fill_blank", _gen_fb_clock_hour,
+              lambda p: True)
+
     # -- 口算题 --
     _register("oral_calc", _gen_oral_div_table,
               lambda p: p.supports_division and p.times_table_max > 0)
