@@ -1,22 +1,115 @@
 """
-算法题目生成器 — 自动生成小学数学题
+算法题目生成器 — 自动生成小学数学题，支持1-6年级上下册
 
-覆盖题型：口算、填空、选择、竖式计算、应用题（含模板）
-每次调用生成不重复的新题，确保题库持续增长。
+GradeProfile 定义各年级数值边界和运算能力，生成器通过注册表按能力筛选。
 """
 import random
 import json
-from typing import List
+from dataclasses import dataclass, field
+from typing import List, Callable, Optional
 from .models import Question
 
-# 二年级下册数值范围
-RANGES = {
-    "divisor": (2, 9),          # 除数范围
-    "quotient": (2, 9),         # 商范围
-    "remainder": (1, 4),        # 余数范围
-    "multiplicand": (2, 9),     # 乘数
-    "add_3digit": (100, 999),   # 三位数加法
-    "sub_3digit": (100, 800),   # 三位数减法
+
+# ============================================================
+# 年级知识画像
+# ============================================================
+
+@dataclass
+class GradeProfile:
+    """年级知识边界——控制生成器出题范围和类型"""
+    grade: int
+    term: int
+    label: str = ""
+
+    # 数值范围
+    max_number: int = 100
+    max_digits: int = 3              # 最大位数
+    supports_negative: bool = False
+
+    # 运算能力
+    supports_multiplication: bool = False
+    supports_division: bool = False
+    supports_remainder: bool = False
+    times_table_max: int = 0         # 乘法口诀最大数（0=不支持）
+    supports_fractions: bool = False
+    supports_decimals: bool = False
+
+    # 几何范围
+    geometry_angles: bool = False     # 角的识别
+    geometry_shapes: bool = False     # 长方形/正方形/平行四边形
+    geometry_cubes: bool = False      # 立方体/三视图
+    geometry_tangram: bool = False    # 七巧板
+
+    # 测量
+    length_units: tuple = ()
+    time_units: tuple = ("时", "分")
+
+
+# 12个学期的知识画像
+PROFILES: dict = {
+    "1-1": GradeProfile(grade=1, term=1, label="一年级上册",
+                         max_number=20, max_digits=1),
+    "1-2": GradeProfile(grade=1, term=2, label="一年级下册",
+                         max_number=100, max_digits=2,
+                         geometry_shapes=True),
+    "2-1": GradeProfile(grade=2, term=1, label="二年级上册",
+                         max_number=100, max_digits=2,
+                         supports_multiplication=True, supports_division=True,
+                         times_table_max=9,
+                         geometry_shapes=True,
+                         length_units=("m", "cm")),
+    "2-2": GradeProfile(grade=2, term=2, label="二年级下册",
+                         max_number=10000, max_digits=4,
+                         supports_multiplication=True, supports_division=True,
+                         supports_remainder=True, times_table_max=9,
+                         geometry_angles=True, geometry_shapes=True,
+                         geometry_cubes=True, geometry_tangram=True,
+                         length_units=("km", "m", "dm", "cm", "mm"),
+                         time_units=("时", "分", "秒")),
+    "3-1": GradeProfile(grade=3, term=1, label="三年级上册",
+                         max_number=10000, max_digits=4,
+                         supports_multiplication=True, supports_division=True,
+                         supports_decimals=True, times_table_max=9,
+                         geometry_angles=True, geometry_shapes=True,
+                         length_units=("km", "m", "dm", "cm", "mm")),
+    "3-2": GradeProfile(grade=3, term=2, label="三年级下册",
+                         max_number=100000, max_digits=5,
+                         supports_multiplication=True, supports_division=True,
+                         supports_fractions=True, supports_decimals=True,
+                         geometry_shapes=True, geometry_cubes=True),
+    "4-1": GradeProfile(grade=4, term=1, label="四年级上册",
+                         max_number=100000000, max_digits=9,
+                         supports_multiplication=True, supports_division=True,
+                         supports_negative=True,
+                         geometry_angles=True, geometry_shapes=True,
+                         length_units=("km", "m", "dm", "cm", "mm")),
+    "4-2": GradeProfile(grade=4, term=2, label="四年级下册",
+                         max_number=100000000, max_digits=9,
+                         supports_multiplication=True, supports_division=True,
+                         supports_decimals=True,
+                         geometry_shapes=True, geometry_cubes=True),
+    "5-1": GradeProfile(grade=5, term=1, label="五年级上册",
+                         max_number=100000000, max_digits=9,
+                         supports_multiplication=True, supports_division=True,
+                         supports_fractions=True, supports_decimals=True,
+                         geometry_shapes=True),
+    "5-2": GradeProfile(grade=5, term=2, label="五年级下册",
+                         max_number=100000000, max_digits=9,
+                         supports_multiplication=True, supports_division=True,
+                         supports_fractions=True, supports_decimals=True,
+                         geometry_shapes=True, geometry_cubes=True),
+    "6-1": GradeProfile(grade=6, term=1, label="六年级上册",
+                         max_number=100000000, max_digits=9,
+                         supports_multiplication=True, supports_division=True,
+                         supports_fractions=True, supports_decimals=True,
+                         supports_negative=True,
+                         geometry_shapes=True),
+    "6-2": GradeProfile(grade=6, term=2, label="六年级下册",
+                         max_number=100000000, max_digits=9,
+                         supports_multiplication=True, supports_division=True,
+                         supports_fractions=True, supports_decimals=True,
+                         supports_negative=True,
+                         geometry_shapes=True, geometry_cubes=True),
 }
 
 
@@ -24,11 +117,17 @@ def _rand(a, b):
     return random.randint(a, b)
 
 
+def get_profile(grade: int = 2, term: int = 2) -> GradeProfile:
+    """获取指定年级/学期的知识画像"""
+    key = f"{grade}-{term}"
+    return PROFILES.get(key, PROFILES["2-2"])
+
+
 # ============================================================
 # 一、口算题生成 (oral_calc)
 # ============================================================
 
-def _gen_oral_div_table(diff: int) -> Question:
+def _gen_oral_div_table(diff: int = 1) -> Question:
     """表内除法口算"""
     b = _rand(*RANGES["divisor"])
     c = _rand(*RANGES["quotient"])
@@ -42,7 +141,7 @@ def _gen_oral_div_table(diff: int) -> Question:
     )
 
 
-def _gen_oral_div_remainder(diff: int) -> Question:
+def _gen_oral_div_remainder(diff: int = 1) -> Question:
     """有余数除法口算"""
     b = _rand(3, 8)
     c = _rand(2, 9)
@@ -57,7 +156,7 @@ def _gen_oral_div_remainder(diff: int) -> Question:
     )
 
 
-def _gen_oral_mix_mult_add(diff: int) -> Question:
+def _gen_oral_mix_mult_add(diff: int = 1) -> Question:
     """乘加混合口算"""
     a = _rand(2, 9)
     b = _rand(2, 9)
@@ -71,7 +170,7 @@ def _gen_oral_mix_mult_add(diff: int) -> Question:
     )
 
 
-def _gen_oral_mix_div_sub(diff: int) -> Question:
+def _gen_oral_mix_div_sub(diff: int = 1) -> Question:
     """除减混合口算"""
     b = _rand(2, 9)
     c = _rand(2, 9)
@@ -86,7 +185,7 @@ def _gen_oral_mix_div_sub(diff: int) -> Question:
     )
 
 
-def _gen_oral_mix_paren(diff: int) -> Question:
+def _gen_oral_mix_paren(diff: int = 1) -> Question:
     """带括号口算"""
     a = _rand(10, 50)
     b = _rand(2, 20)
@@ -118,7 +217,7 @@ def _gen_oral_mix_paren(diff: int) -> Question:
     )
 
 
-def _gen_oral_length(diff: int) -> Question:
+def _gen_oral_length(diff: int = 1) -> Question:
     """长度单位换算口算"""
     conversions = [
         (5, "dm", "cm", 50), (8, "dm", "cm", 80),
@@ -137,7 +236,7 @@ def _gen_oral_length(diff: int) -> Question:
     )
 
 
-def _gen_oral_3digit_add(diff: int) -> Question:
+def _gen_oral_3digit_add(diff: int = 1) -> Question:
     """三位数加法口算"""
     a = _rand(*RANGES["add_3digit"])
     b = _rand(100, 600)
@@ -154,7 +253,7 @@ def _gen_oral_3digit_add(diff: int) -> Question:
     )
 
 
-def _gen_oral_3digit_sub(diff: int) -> Question:
+def _gen_oral_3digit_sub(diff: int = 1) -> Question:
     """三位数减法口算"""
     a = _rand(300, 999)
     b = _rand(100, a - 50)
@@ -167,7 +266,7 @@ def _gen_oral_3digit_sub(diff: int) -> Question:
     )
 
 
-def _gen_oral_time(diff: int) -> Question:
+def _gen_oral_time(diff: int = 1) -> Question:
     """时间换算口算"""
     conversions = [
         ("2 时 = ( ) 分", "120"),
@@ -212,7 +311,7 @@ ORAL_GENERATORS = [
 # 二、填空题生成 (fill_blank)
 # ============================================================
 
-def _gen_fb_remainder_relation(diff: int) -> Question:
+def _gen_fb_remainder_relation(diff: int = 1) -> Question:
     """余数与除数关系"""
     d = _rand(4, 8)
     max_r = d - 1
@@ -226,7 +325,7 @@ def _gen_fb_remainder_relation(diff: int) -> Question:
     )
 
 
-def _gen_fb_find_dividend(diff: int) -> Question:
+def _gen_fb_find_dividend(diff: int = 1) -> Question:
     """已知除数商余数求被除数"""
     d = _rand(3, 8)
     q = _rand(3, 9)
@@ -241,7 +340,7 @@ def _gen_fb_find_dividend(diff: int) -> Question:
     )
 
 
-def _gen_fb_mix_order(diff: int) -> Question:
+def _gen_fb_mix_order(diff: int = 1) -> Question:
     """混合运算顺序"""
     a = _rand(20, 60)
     b = _rand(2, 9)
@@ -256,7 +355,7 @@ def _gen_fb_mix_order(diff: int) -> Question:
     )
 
 
-def _gen_fb_reading(diff: int) -> Question:
+def _gen_fb_reading(diff: int = 1) -> Question:
     """万以内数读写"""
     templates = [
         (f"{_rand(2,9)}000", "几千"),
@@ -287,7 +386,7 @@ def _gen_fb_reading(diff: int) -> Question:
     )
 
 
-def _gen_fb_compare(diff: int) -> Question:
+def _gen_fb_compare(diff: int = 1) -> Question:
     """数的大小比较"""
     a = _rand(1000, 9999)
     b = _rand(1000, 9999)
@@ -302,12 +401,12 @@ def _gen_fb_compare(diff: int) -> Question:
     )
 
 
-def _gen_fb_unit_conv(diff: int) -> Question:
+def _gen_fb_unit_conv(diff: int = 1) -> Question:
     """长度单位换算填空"""
     return _gen_oral_length(diff)
 
 
-def _gen_fb_length_select(diff: int) -> Question:
+def _gen_fb_length_select(diff: int = 1) -> Question:
     """选择合适的长度单位"""
     items = [
         ("课桌高约 7（    ）", "dm"),
@@ -326,7 +425,7 @@ def _gen_fb_length_select(diff: int) -> Question:
     )
 
 
-def _gen_fb_angle(diff: int) -> Question:
+def _gen_fb_angle(diff: int = 1) -> Question:
     """角的认识"""
     templates = [
         ("角有一个（    ）和两条（    ）。", "顶点；边"),
@@ -342,7 +441,7 @@ def _gen_fb_angle(diff: int) -> Question:
     )
 
 
-def _gen_fb_clock_walk(diff: int) -> Question:
+def _gen_fb_clock_walk(diff: int = 1) -> Question:
     """钟面指针走动"""
     start = _rand(1, 10)
     end = _rand(start + 1, 12)
@@ -356,7 +455,7 @@ def _gen_fb_clock_walk(diff: int) -> Question:
     )
 
 
-def _gen_fb_elapsed_time(diff: int) -> Question:
+def _gen_fb_elapsed_time(diff: int = 1) -> Question:
     """经过时间计算"""
     h = _rand(7, 8)
     m1 = _rand(0, 3) * 10
@@ -371,7 +470,7 @@ def _gen_fb_elapsed_time(diff: int) -> Question:
     )
 
 
-def _gen_gfx_count_angles(diff: int) -> Question:
+def _gen_gfx_count_angles(diff: int = 1) -> Question:
     """图形题：数角"""
     shapes = [
         ("△", "三角形", 3),
@@ -396,7 +495,7 @@ def _gen_gfx_count_angles(diff: int) -> Question:
     )
 
 
-def _gen_gfx_angle_identify(diff: int) -> Question:
+def _gen_gfx_angle_identify(diff: int = 1) -> Question:
     """图形题：角分类"""
     angle_data = [
         ("╲", "钝角"), ("∠", "锐角"), ("┌", "直角"),
@@ -419,7 +518,7 @@ def _gen_gfx_angle_identify(diff: int) -> Question:
     )
 
 
-def _gen_gfx_grid_count(diff: int) -> Question:
+def _gen_gfx_grid_count(diff: int = 1) -> Question:
     """图形题：数长方形"""
     rows = random.choice([2, 2, 3])
     cols = random.choice([2, 3, 3])
@@ -436,7 +535,7 @@ def _gen_gfx_grid_count(diff: int) -> Question:
     )
 
 
-def _gen_clock_read(diff: int) -> Question:
+def _gen_clock_read(diff: int = 1) -> Question:
     """图形题：钟面读时"""
     h = _rand(1, 12)
     m = _rand(0, 11) * 5  # 0,5,10,...,55
@@ -453,7 +552,7 @@ def _gen_clock_read(diff: int) -> Question:
     )
 
 
-def _gen_clock_elapsed(diff: int) -> Question:
+def _gen_clock_elapsed(diff: int = 1) -> Question:
     """图形题：经过时间"""
     h = _rand(7, 10)
     m1 = _rand(0, 3) * 15
@@ -482,7 +581,7 @@ def _gen_clock_elapsed(diff: int) -> Question:
     )
 
 
-def _gen_cube_stack(diff: int) -> Question:
+def _gen_cube_stack(diff: int = 1) -> Question:
     """图形题：立方体堆叠计数"""
     if diff <= 2:
         rows, cols = 2, 2
@@ -511,7 +610,7 @@ def _gen_cube_stack(diff: int) -> Question:
     )
 
 
-def _gen_cube_view(diff: int) -> Question:
+def _gen_cube_view(diff: int = 1) -> Question:
     """图形题：三视图立方体"""
     cols = _rand(2, 3)
     front = [_rand(1, 3) for _ in range(cols)]
@@ -528,7 +627,7 @@ def _gen_cube_view(diff: int) -> Question:
     )
 
 
-def _gen_gfx_shape_classify(diff: int) -> Question:
+def _gen_gfx_shape_classify(diff: int = 1) -> Question:
     """图形题：图形分类/命名"""
     shape_pool = [
         ("△", "三角形"), ("□", "正方形"), ("▭", "长方形"),
@@ -552,7 +651,7 @@ def _gen_gfx_shape_classify(diff: int) -> Question:
     )
 
 
-def _gen_gfx_parallelogram(diff: int) -> Question:
+def _gen_gfx_parallelogram(diff: int = 1) -> Question:
     """图形题：平行四边形变形"""
     contents = [
         "看一看，长方形拉成平行四边形后，什么变了？什么没变？",
@@ -621,7 +720,7 @@ FILL_BLANK_GENERATORS = [
 # 三、选择题生成 (choice)
 # ============================================================
 
-def _gen_ch_round_up(diff: int) -> Question:
+def _gen_ch_round_up(diff: int = 1) -> Question:
     """进一法选择题"""
     total = _rand(20, 50)
     per = _rand(4, 8)
@@ -642,7 +741,7 @@ def _gen_ch_round_up(diff: int) -> Question:
     )
 
 
-def _gen_ch_remainder_max(diff: int) -> Question:
+def _gen_ch_remainder_max(diff: int = 1) -> Question:
     """余数范围判断"""
     correct = _rand(4, 8)
     correct_max = correct - 1
@@ -662,7 +761,7 @@ def _gen_ch_remainder_max(diff: int) -> Question:
     )
 
 
-def _gen_ch_angle_size(diff: int) -> Question:
+def _gen_ch_angle_size(diff: int = 1) -> Question:
     """角的大小与什么有关"""
     return Question(
         unit=6, section="choice", difficulty=diff,
@@ -677,7 +776,7 @@ def _gen_ch_angle_size(diff: int) -> Question:
     )
 
 
-def _gen_ch_time_diff(diff: int) -> Question:
+def _gen_ch_time_diff(diff: int = 1) -> Question:
     """时间快慢比较"""
     names = ["小红", "小英", "小云"]
     times = [_rand(10, 20) for _ in range(3)]
@@ -713,7 +812,7 @@ CHOICE_GENERATORS = [
 # 四、竖式计算生成 (vertical_calc)
 # ============================================================
 
-def _gen_vc_div_vertical(diff: int) -> Question:
+def _gen_vc_div_vertical(diff: int = 1) -> Question:
     """除法竖式"""
     d = _rand(3, 8)
     q = _rand(3, 12)
@@ -729,7 +828,7 @@ def _gen_vc_div_vertical(diff: int) -> Question:
     )
 
 
-def _gen_vc_mix_detach(diff: int) -> Question:
+def _gen_vc_mix_detach(diff: int = 1) -> Question:
     """脱式计算"""
     a = _rand(20, 80)
     b = _rand(3, 9)
@@ -760,7 +859,7 @@ def _gen_vc_mix_detach(diff: int) -> Question:
     )
 
 
-def _gen_vc_3digit_vertical(diff: int) -> Question:
+def _gen_vc_3digit_vertical(diff: int = 1) -> Question:
     """三位数加减竖式"""
     a = _rand(200, 999)
     b = _rand(100, 999)
@@ -998,6 +1097,106 @@ def _gen_word_problem() -> Question:
 
 
 # ============================================================
+# 生成器注册表：能力名 -> (section, 生成器函数, 适用条件lambda)
+# ============================================================
+
+GeneratorEntry = tuple[str, Callable, Callable[[GradeProfile], bool]]
+
+GENERATOR_REGISTRY: List[GeneratorEntry] = []
+
+
+def _register(section: str, fn: Callable, condition: Callable[[GradeProfile], bool]):
+    """注册一个生成器"""
+    GENERATOR_REGISTRY.append((section, fn, condition))
+
+
+def _register_all():
+    """注册所有生成器（在模块加载时调用）"""
+    # -- 口算题 --
+    _register("oral_calc", _gen_oral_div_table,
+              lambda p: p.supports_division and p.times_table_max > 0)
+    _register("oral_calc", _gen_oral_div_remainder,
+              lambda p: p.supports_remainder)
+    _register("oral_calc", _gen_oral_mix_mult_add,
+              lambda p: p.supports_multiplication)
+    _register("oral_calc", _gen_oral_mix_div_sub,
+              lambda p: p.supports_division)
+    _register("oral_calc", _gen_oral_mix_paren,
+              lambda p: p.supports_multiplication)
+    _register("oral_calc", _gen_oral_length,
+              lambda p: len(p.length_units) > 0)
+    _register("oral_calc", _gen_oral_3digit_add,
+              lambda p: p.max_digits >= 3)
+    _register("oral_calc", _gen_oral_3digit_sub,
+              lambda p: p.max_digits >= 3)
+    _register("oral_calc", _gen_oral_time,
+              lambda p: len(p.time_units) > 0)
+
+    # -- 填空题 --
+    _register("fill_blank", _gen_fb_remainder_relation,
+              lambda p: p.supports_remainder)
+    _register("fill_blank", _gen_fb_find_dividend,
+              lambda p: p.supports_division)
+    _register("fill_blank", _gen_fb_mix_order,
+              lambda p: p.supports_multiplication)
+    _register("fill_blank", _gen_fb_reading,
+              lambda p: p.max_digits >= 4)
+    _register("fill_blank", _gen_fb_compare,
+              lambda p: p.max_digits >= 3)
+    _register("fill_blank", _gen_fb_unit_conv,
+              lambda p: len(p.length_units) > 0)
+    _register("fill_blank", _gen_fb_length_select,
+              lambda p: len(p.length_units) > 0)
+    _register("fill_blank", _gen_fb_angle,
+              lambda p: p.geometry_angles)
+    _register("fill_blank", _gen_fb_clock_walk,
+              lambda p: len(p.time_units) >= 2)
+    _register("fill_blank", _gen_fb_elapsed_time,
+              lambda p: len(p.time_units) >= 2)
+    # 图形题生成器（填空）
+    _register("fill_blank", _gen_gfx_count_angles,
+              lambda p: p.geometry_angles)
+    _register("fill_blank", _gen_gfx_angle_identify,
+              lambda p: p.geometry_angles)
+    _register("fill_blank", _gen_gfx_grid_count,
+              lambda p: p.geometry_shapes)
+    _register("fill_blank", _gen_clock_read,
+              lambda p: len(p.time_units) >= 2)
+    _register("fill_blank", _gen_clock_elapsed,
+              lambda p: len(p.time_units) >= 2)
+    _register("fill_blank", _gen_cube_stack,
+              lambda p: p.geometry_cubes)
+    _register("fill_blank", _gen_cube_view,
+              lambda p: p.geometry_cubes)
+    _register("fill_blank", _gen_gfx_shape_classify,
+              lambda p: p.geometry_shapes)
+    _register("fill_blank", _gen_gfx_parallelogram,
+              lambda p: p.geometry_shapes)
+
+    # -- 选择题 --
+    _register("choice", _gen_ch_round_up,
+              lambda p: p.supports_division)
+    _register("choice", _gen_ch_remainder_max,
+              lambda p: p.supports_remainder)
+    _register("choice", _gen_ch_angle_size,
+              lambda p: p.geometry_angles)
+    _register("choice", _gen_ch_time_diff,
+              lambda p: len(p.time_units) >= 2)
+
+    # -- 竖式计算 --
+    _register("vertical_calc", _gen_vc_div_vertical,
+              lambda p: p.supports_division)
+    _register("vertical_calc", _gen_vc_mix_detach,
+              lambda p: p.supports_multiplication)
+    _register("vertical_calc", _gen_vc_3digit_vertical,
+              lambda p: p.max_digits >= 3)
+
+
+# 模块加载时执行注册
+_register_all()
+
+
+# ============================================================
 # 批量生成入口
 # ============================================================
 
@@ -1005,30 +1204,29 @@ def generate_questions(
     count: int = 30,
     sections: list = None,
     units: list = None,
+    grade: int = 2,
+    term: int = 2,
 ) -> List[Question]:
     """
-    批量生成题目。
+    批量生成题目。根据年级/学期自动筛选适用的生成器。
 
     参数：
-        count: 生成数量（约数，实际可能略少）
+        count: 生成数量
         sections: 限定题型，None=全部
         units: 限定单元，None=全部
+        grade: 年级 1-6
+        term: 学期 1=上, 2=下
     """
+    profile = get_profile(grade, term)
+
     if sections is None:
         sections = ["oral_calc", "fill_blank", "choice", "vertical_calc", "word_problem"]
 
-    all_generators = []
-    if "oral_calc" in sections:
-        all_generators.extend(ORAL_GENERATORS)
-    if "fill_blank" in sections:
-        all_generators.extend(FILL_BLANK_GENERATORS)
-    if "choice" in sections:
-        all_generators.extend(CHOICE_GENERATORS)
-    if "vertical_calc" in sections:
-        all_generators.extend(VERTICAL_GENERATORS)
-    if "word_problem" in sections:
-        # 应用题用模板，重复生成时有变体
-        pass
+    # 从注册表中筛选适用于当前年级的生成器
+    active_generators = []
+    for section, fn, condition in GENERATOR_REGISTRY:
+        if section in sections and condition(profile):
+            active_generators.append((fn, section))
 
     questions = []
     attempts = 0
@@ -1039,16 +1237,21 @@ def generate_questions(
 
         if "word_problem" in sections and random.random() < 0.15:
             q = _gen_word_problem()
-        elif all_generators:
-            gen_fn, diff = random.choice(all_generators)
+            q.grade = grade
+            q.term = term
+        elif active_generators:
+            fn, _ = random.choice(active_generators)
             try:
-                q = gen_fn(diff)
+                q = fn()
             except Exception:
                 continue
+            q.grade = grade
+            q.term = term
         else:
             q = _gen_word_problem()
+            q.grade = grade
+            q.term = term
 
-        # 单元过滤
         if units and q.unit not in units:
             continue
 
