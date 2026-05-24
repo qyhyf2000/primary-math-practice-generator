@@ -1919,6 +1919,9 @@ def _register_all():
               lambda p: p.geometry_cubes and p.supports_fractions)
     _register("fill_blank", _gen_fb_proportion,
               lambda p: p.supports_fractions and p.supports_decimals)
+    # -- 应用题：所有年级通用 --
+    _register("word_problem", _gen_word_problem,
+              lambda p: True)
 
     # -- 口算题 --
     _register("oral_calc", _gen_oral_div_table,

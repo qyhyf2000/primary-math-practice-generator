@@ -40,27 +40,38 @@ class QuestionPicker:
         results: List[Question] = []
         picked_ids: set = set()
 
-        low_qs = self._pick_by_tier(
-            section_id, low_count, lo, mid, unit_filter, tag_filter, grade, term
-        )
+        def _safe_pick(d_range, need):
+            """安全选取，失败回退到极限范围 [1,5]"""
+            try:
+                return self._pick_by_tier(
+                    section_id, need, d_range[0], d_range[1],
+                    unit_filter, tag_filter, grade, term
+                )
+            except NotEnoughQuestionsError:
+                return self._pick_by_tier(
+                    section_id, need, 1, 5,
+                    unit_filter, tag_filter, grade, term
+                )
+
+        low_qs = _safe_pick((lo, mid), low_count)
         self._add_unique(results, low_qs, picked_ids)
 
-        high_qs = self._pick_by_tier(
-            section_id, high_count, mid + 1, hi, unit_filter, tag_filter, grade, term
-        )
+        high_qs = _safe_pick((mid + 1, hi), high_count)
         self._add_unique(results, high_qs, picked_ids)
 
-        flex_qs = self._pick_by_tier(
-            section_id, flex_count, lo, hi, unit_filter, tag_filter, grade, term
-        )
+        flex_qs = _safe_pick((lo, hi), flex_count)
         self._add_unique(results, flex_qs, picked_ids)
 
         if len(results) < count:
             remaining = count - len(results)
-            more_qs = self._pick_by_tier(
-                section_id, remaining, lo, hi, unit_filter, tag_filter, grade, term
-            )
-            self._add_unique(results, more_qs, picked_ids)
+            try:
+                more_qs = self._pick_by_tier(
+                    section_id, remaining, 1, 5,
+                    unit_filter, tag_filter, grade, term
+                )
+                self._add_unique(results, more_qs, picked_ids)
+            except NotEnoughQuestionsError:
+                pass
 
         random.shuffle(results)
         return results[:count]
