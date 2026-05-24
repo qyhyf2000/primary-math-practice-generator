@@ -208,32 +208,23 @@ def on_reload_seed() -> str:
 
 
 def on_scrape_url(url: str) -> str:
-    """从指定 URL 抓取题目"""
+    """从指定 URL 学习题目结构并生成变形题"""
     if not url or not url.startswith("http"):
         return "请输入有效的 URL"
     try:
+        from src.question_bank.scrapers import learn_and_generate
         with DBManager(config.get_db_path()) as db:
-            from src.question_bank.scrapers import scrape_urls
-            raw = scrape_urls([url])
-            added = 0
-            for item in raw:
-                if not db.content_exists(item["content"]):
-                    from src.question_bank.models import Question
-                    q = Question(
-                        unit=item.get("unit", 0),
-                        section=item.get("section", "oral_calc"),
-                        difficulty=item.get("difficulty", 1),
-                        content=item["content"],
-                        answer=item.get("answer", ""),
-                        source="scraped",
-                    )
-                    db.insert_question(q)
-                    added += 1
-            return f"从 {url[-40:]} 抓取到 {len(raw)} 题，新入库 {added} 题"
+            qs = learn_and_generate(url, grade=config.active_grade,
+                                    term=config.active_term, per_template=5)
+            if not qs:
+                return f"未从 {url[-40:]} 提取到有效题目模板"
+            added = db.insert_batch(qs)
+            total, _ = db.get_question_count()
+            return f"从 {url[-40:]} 学习 {len(qs)} 个模板变体，入库 {added} 题（题库总数 {total}）"
     except Exception as e:
         import traceback
         traceback.print_exc()
-        return f"抓取失败: {e}"
+        return f"学习失败: {e}"
 
 
 def on_update_bank() -> str:

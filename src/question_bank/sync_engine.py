@@ -105,12 +105,10 @@ class SyncEngine:
     # ================================================================
 
     def _scrape_urls(self, grade_filter: int = None, term_filter: int = None) -> dict:
-        """从配置的URL列表抓取题目，支持 grade/term 标注的 URL"""
-        from .scrapers import scrape_urls, KNOWN_51TEST_URLS
+        """从配置的URL学习题目结构并生成变形题（不再直接存储抓取内容）"""
+        from .scrapers import learn_and_generate
 
-        # 收集要抓取的URL及关联的 grade/term
         url_entries = []
-
         scraper_urls = self.sync_config.get("scraper_urls", [])
         for entry in scraper_urls:
             if isinstance(entry, dict):
@@ -128,38 +126,21 @@ class SyncEngine:
             return {"added": 0, "skipped": 0, "error": None}
 
         added = 0
-        skipped = 0
         errors = []
 
         for url, g, t in url_entries:
             try:
-                raw = scrape_urls([url])
+                qs = learn_and_generate(url, grade=g, term=t, per_template=3)
+                if qs:
+                    cnt = self.db.insert_batch(qs)
+                    added += cnt
+                    logger.info(f"学习 {url[-40:]}: 生成 {len(qs)} 题, 入库 {cnt} 题")
             except Exception as e:
                 errors.append(f"{url[-30:]}: {e}")
                 continue
 
-            for item in raw:
-                content = item.get("content", "")
-                if not content or self.db.content_exists(content):
-                    skipped += 1
-                    continue
-
-                q = Question(
-                    grade=g, term=t,
-                    unit=item.get("unit", 0),
-                    section=item.get("section", "oral_calc"),
-                    difficulty=item.get("difficulty", 1),
-                    content=content,
-                    answer=item.get("answer", ""),
-                    knowledge_point=item.get("knowledge_point", ""),
-                    tags=item.get("tags", f"抓取,{url[-40:]}"),
-                    source="scraped",
-                )
-                self.db.insert_question(q)
-                added += 1
-
         err_msg = "; ".join(errors[:3]) if errors else None
-        return {"added": added, "skipped": skipped, "error": err_msg}
+        return {"added": added, "skipped": 0, "error": err_msg}
 
     # ================================================================
     # 来源3：远程 API
