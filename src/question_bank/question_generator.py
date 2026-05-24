@@ -795,6 +795,206 @@ def _gen_fb_angle_measure(diff: int = 1) -> Question:
     )
 
 
+# ============================================================
+# 四年级 + 五年级 + 六年级生成器
+# ============================================================
+
+# -- 四下：小数运算 --
+def _gen_oral_decimal_add(diff: int = 1) -> Question:
+    """小数加减口算"""
+    a = round(_rand(10, 99) / 10, 1)
+    b = round(_rand(10, 99) / 10, 1)
+    if _rand(0, 1):
+        return Question(unit=1, section="oral_calc", difficulty=diff,
+            content=f"{a} + {b} =", answer=str(round(a + b, 1)),
+            knowledge_point="小数加法", tags="口算,小数", source="generated")
+    else:
+        if a < b: a, b = b, a
+        return Question(unit=1, section="oral_calc", difficulty=diff,
+            content=f"{a} - {b} =", answer=str(round(a - b, 1)),
+            knowledge_point="小数减法", tags="口算,小数", source="generated")
+
+
+def _gen_oral_decimal_mult(diff: int = 1) -> Question:
+    """小数乘法口算（五上）"""
+    a = round(_rand(1, 9) / 10, 1)
+    b = _rand(2, 9)
+    return Question(unit=3, section="oral_calc", difficulty=min(diff + 1, 3),
+        content=f"{a} × {b} =", answer=str(round(a * b, 1)),
+        knowledge_point="小数乘法", tags="口算,小数", source="generated")
+
+
+def _gen_fb_triangle(diff: int = 1) -> Question:
+    """三角形分类填空（四下）"""
+    items = [
+        ("按角分类：三个角都是锐角的是（    ）三角形", "锐角"),
+        ("有一个角是直角的是（    ）三角形", "直角"),
+        ("有一个角是钝角的是（    ）三角形", "钝角"),
+        ("三角形内角和是（    ）度", "180"),
+        ("三角形任意两边之和（    ）第三边", "大于"),
+    ]
+    c, a = random.choice(items)
+    return Question(unit=2, section="fill_blank", difficulty=diff,
+        content=c, answer=a, knowledge_point="三角形分类", tags="填空,三角形",
+        source="generated")
+
+
+def _gen_fb_equation(diff: int = 1) -> Question:
+    """简单方程填空（四下/五下）"""
+    x = _rand(2, 20)
+    a = _rand(1, 5)
+    b = x + _rand(-3, 3)
+    return Question(unit=5, section="fill_blank", difficulty=diff,
+        content=f"解方程：x + {a} = {b + a}，x = (    )",
+        answer=str(b), knowledge_point="解方程", tags="填空,方程",
+        source="generated")
+
+
+# -- 五上：多边形面积 --
+def _gen_fb_polygon_area(diff: int = 1) -> Question:
+    """多边形面积填空"""
+    b = _rand(3, 12)
+    h = _rand(2, 10)
+    t = _rand(0, 2)
+    if t == 0:
+        return Question(unit=4, section="fill_blank", difficulty=diff,
+            content=f"一个平行四边形底 {b} cm，高 {h} cm，面积是（    ）cm²。",
+            answer=str(b * h), knowledge_point="平行四边形面积", tags="填空,面积",
+            source="generated")
+    elif t == 1:
+        return Question(unit=4, section="fill_blank", difficulty=min(diff + 1, 3),
+            content=f"一个三角形底 {b} cm，高 {h} cm，面积是（    ）cm²。",
+            answer=str(round(b * h / 2, 1)), knowledge_point="三角形面积", tags="填空,面积",
+            source="generated")
+    else:
+        a = _rand(3, 8)
+        return Question(unit=4, section="fill_blank", difficulty=min(diff + 1, 3),
+            content=f"一个梯形上底 {a} cm，下底 {b} cm，高 {h} cm，面积是（    ）cm²。",
+            answer=str(round((a + b) * h / 2, 1)), knowledge_point="梯形面积", tags="填空,面积",
+            source="generated")
+
+
+# -- 五上：倍数因数 --
+def _gen_fb_factor_multiple(diff: int = 1) -> Question:
+    """倍数因数填空"""
+    a = _rand(10, 50)
+    return Question(unit=3, section="fill_blank", difficulty=diff,
+        content=f"{a} 的因数有（                          ）。",
+        answer="、".join(str(i) for i in range(1, a + 1) if a % i == 0),
+        knowledge_point="找因数", tags="填空,因数", source="generated")
+
+
+# -- 五下：分数运算 --
+def _gen_oral_fraction_op(diff: int = 1) -> Question:
+    """分数加减口算"""
+    den = _rand(3, 8)
+    n1 = _rand(1, den - 1)
+    n2 = _rand(1, den - n1) if _rand(0, 1) else _rand(1, n1)
+    op = "+" if _rand(0, 1) else "-"
+    if op == "+":
+        return Question(unit=1, section="oral_calc", difficulty=diff,
+            content=f"{n1}/{den} + {n2}/{den} =",
+            answer=f"{n1 + n2}/{den}", knowledge_point="同分母分数加法", tags="口算,分数",
+            source="generated")
+    else:
+        a, b = max(n1, n2), min(n1, n2)
+        return Question(unit=1, section="oral_calc", difficulty=diff,
+            content=f"{a}/{den} - {b}/{den} =",
+            answer=f"{a - b}/{den}", knowledge_point="同分母分数减法", tags="口算,分数",
+            source="generated")
+
+
+# -- 五下：长方体 --
+def _gen_fb_cuboid(diff: int = 1) -> Question:
+    """长方体表面积/体积填空"""
+    l = _rand(3, 10)
+    w = _rand(2, 8)
+    h = _rand(2, 6)
+    if _rand(0, 1):
+        v = l * w * h
+        return Question(unit=2, section="fill_blank", difficulty=diff,
+            content=f"一个长方体长{l}cm，宽{w}cm，高{h}cm，体积是（    ）cm³。",
+            answer=str(v), knowledge_point="长方体体积", tags="填空,体积",
+            source="generated")
+    else:
+        s = 2 * (l * w + l * h + w * h)
+        return Question(unit=2, section="fill_blank", difficulty=min(diff + 1, 3),
+            content=f"一个长方体长{l}cm，宽{w}cm，高{h}cm，表面积是（    ）cm²。",
+            answer=str(s), knowledge_point="长方体表面积", tags="填空,表面积",
+            source="generated")
+
+
+# -- 六上：圆 --
+def _gen_fb_circle(diff: int = 1) -> Question:
+    """圆周长/面积填空"""
+    r = _rand(2, 10)
+    if _rand(0, 1):
+        pi = 3.14
+        return Question(unit=1, section="fill_blank", difficulty=diff,
+            content=f"一个圆的半径是 {r} cm，周长约是（    ）cm。（π取3.14）",
+            answer=str(round(2 * pi * r, 2)), knowledge_point="圆的周长", tags="填空,圆",
+            source="generated")
+    else:
+        return Question(unit=1, section="fill_blank", difficulty=min(diff + 1, 3),
+            content=f"一个圆的半径是 {r} cm，面积约是（    ）cm²。（π取3.14）",
+            answer=str(round(3.14 * r * r, 2)), knowledge_point="圆的面积", tags="填空,圆",
+            source="generated")
+
+
+# -- 六上：百分数 --
+def _gen_oral_percent(diff: int = 1) -> Question:
+    """百分数互化"""
+    items = [
+        ("0.25 = (    )%", "25"),
+        ("0.5 = (    )%", "50"),
+        ("0.75 = (    )%", "75"),
+        ("20% = (    )（填小数）", "0.2"),
+        ("1/4 = (    )%", "25"),
+    ]
+    c, a = random.choice(items)
+    return Question(unit=4, section="oral_calc", difficulty=diff,
+        content=c, answer=a, knowledge_point="百分数互化", tags="口算,百分数",
+        source="generated")
+
+
+# -- 六上：比 --
+def _gen_fb_ratio(diff: int = 1) -> Question:
+    """比的认识填空"""
+    a = _rand(2, 10)
+    b = _rand(2, 10)
+    # simplify
+    import math as _m
+    g = _m.gcd(a, b)
+    return Question(unit=6, section="fill_blank", difficulty=diff,
+        content=f"化简比：{a} : {b} = (    ) : (    )",
+        answer=f"{a//g}；{b//g}", knowledge_point="化简比", tags="填空,比",
+        source="generated")
+
+
+# -- 六下：圆柱 --
+def _gen_fb_cylinder(diff: int = 1) -> Question:
+    """圆柱体积填空"""
+    r = _rand(2, 6)
+    h = _rand(3, 10)
+    v = round(3.14 * r * r * h, 1)
+    return Question(unit=1, section="fill_blank", difficulty=min(diff + 1, 3),
+        content=f"一个圆柱底面半径 {r} cm，高 {h} cm，体积约是（    ）cm³。（π取3.14）",
+        answer=str(v), knowledge_point="圆柱体积", tags="填空,圆柱",
+        source="generated")
+
+
+# -- 六下：比例 --
+def _gen_fb_proportion(diff: int = 1) -> Question:
+    """比例填空"""
+    a = _rand(2, 6)
+    b = _rand(3, 8)
+    x = a * b // _rand(2, 4)
+    return Question(unit=2, section="fill_blank", difficulty=diff,
+        content=f"解比例：{a} : {b} = {x} : x，x = (    )",
+        answer=str(b * x // a), knowledge_point="解比例", tags="填空,比例",
+        source="generated")
+
+
 # -- 旧列表（已不由入口函数使用，保留兼容） --
 ORAL_GENERATORS = [
     (_gen_oral_div_table, 1),
@@ -1688,6 +1888,37 @@ def _register_all():
               lambda p: p.max_digits >= 8)
     _register("fill_blank", _gen_fb_angle_measure,
               lambda p: p.geometry_angles and p.max_digits >= 3)
+    # -- 四下~五上：小数 + 三角形 + 方程 + 多边形面积 + 因数 --
+    _register("oral_calc", _gen_oral_decimal_add,
+              lambda p: p.supports_decimals)
+    _register("oral_calc", _gen_oral_decimal_mult,
+              lambda p: p.supports_decimals and p.supports_multiplication)
+    _register("fill_blank", _gen_fb_triangle,
+              lambda p: p.geometry_shapes and p.max_digits >= 3
+                        and not p.supports_fractions)
+    _register("fill_blank", _gen_fb_equation,
+              lambda p: p.supports_multiplication and p.max_digits >= 3)
+    _register("fill_blank", _gen_fb_polygon_area,
+              lambda p: p.supports_decimals and p.supports_multiplication)
+    _register("fill_blank", _gen_fb_factor_multiple,
+              lambda p: p.supports_multiplication and p.max_digits >= 3
+                        and not p.supports_decimals)
+    # -- 五下~六上：分数 + 长方体 + 圆 + 百分数 + 比 --
+    _register("oral_calc", _gen_oral_fraction_op,
+              lambda p: p.supports_fractions)
+    _register("fill_blank", _gen_fb_cuboid,
+              lambda p: p.geometry_cubes and p.supports_fractions)
+    _register("fill_blank", _gen_fb_circle,
+              lambda p: p.supports_fractions and p.supports_decimals)
+    _register("oral_calc", _gen_oral_percent,
+              lambda p: p.supports_decimals and p.supports_fractions)
+    _register("fill_blank", _gen_fb_ratio,
+              lambda p: p.supports_fractions and p.supports_decimals)
+    # -- 六下：圆柱 + 比例 --
+    _register("fill_blank", _gen_fb_cylinder,
+              lambda p: p.geometry_cubes and p.supports_fractions)
+    _register("fill_blank", _gen_fb_proportion,
+              lambda p: p.supports_fractions and p.supports_decimals)
 
     # -- 口算题 --
     _register("oral_calc", _gen_oral_div_table,
