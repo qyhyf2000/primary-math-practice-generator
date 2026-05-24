@@ -20,6 +20,7 @@ from src.question_bank.seed_data import get_all_seed_questions
 from src.question_bank.sync_engine import SyncEngine
 from src.generator.exam_builder import ExamBuilder
 from src.renderer.docx_renderer import DocxRenderer
+from src.wrong_answer_manager import WrongAnswerManager
 
 config = ConfigManager()
 
@@ -436,7 +437,113 @@ def build_ui():
                 outputs=[scrape_msg],
             )
 
-        # ===== Tab 3: 系统设置 =====
+        # ===== Tab 3: 错题本 =====
+        with gr.Tab("错题本"):
+            with gr.Row():
+                with gr.Column(scale=1):
+                    gr.Markdown("### 录入错题")
+                    wrong_qid = gr.Number(label="题目编号（试卷上的题号）", precision=0)
+                    wrong_ans = gr.Textbox(label="学生的错误答案（可选）", placeholder="留空表示只记录题目")
+                    btn_wrong = gr.Button("记录错题", variant="primary")
+                    btn_clear_wrong = gr.Button("清空错题本", variant="stop", size="sm")
+
+                with gr.Column(scale=1):
+                    gr.Markdown("### 错题统计")
+                    wrong_stats = gr.Markdown("点击刷新查看统计")
+                    btn_wrong_stats = gr.Button("刷新统计", variant="secondary")
+                    btn_gen_wrong = gr.Button("生成错题重练卷", variant="primary")
+
+            wrong_detail = gr.Dataframe(
+                headers=["ID", "题号", "错误答案", "时间", "已复习", "题目内容", "正确答案"],
+                label="错题详情（最近20条）",
+                interactive=False,
+            )
+            wrong_msg = gr.Textbox(label="操作结果", interactive=False)
+
+            def on_record_wrong(qid, ans):
+                if not qid:
+                    return "请输入题目编号", *([""]*6)
+                db2 = DBManager(config.get_db_path())
+                try:
+                    mgr = WrongAnswerManager(db2.conn)
+                    mgr.record_wrong(int(qid), ans or "")
+                    return f"已记录错题 #{int(qid)}", *on_refresh_wrong()
+                finally:
+                    db2.close()
+
+            def on_refresh_wrong():
+                db2 = DBManager(config.get_db_path())
+                try:
+                    mgr = WrongAnswerManager(db2.conn)
+                    s = mgr.get_wrong_stats()
+                    stats = f"**错题总数**: {s['total']} | **未复习**: {s['unreviewed']} | **近7天**: {s['recent_7d']}"
+                    details = mgr.get_wrong_detail(20)
+                    rows = [[d["wrong_id"], d["question_id"], d["wrong_answer"],
+                             d["wrong_at"][:10] if d["wrong_at"] else "", "是" if d["reviewed"] else "否",
+                             d["content"][:50], d["answer"][:20]]
+                            for d in details]
+                    return stats, rows, ""
+                finally:
+                    db2.close()
+
+            def on_gen_wrong_exam():
+                db2 = DBManager(config.get_db_path())
+                try:
+                    mgr = WrongAnswerManager(db2.conn)
+                    ids = mgr.get_wrong_question_ids(25)
+                    if not ids:
+                        return "错题本为空，先录入错题吧", None
+                    # 从题库中获取错题
+                    from src.question_bank.models import Question, Exam, ExamSection
+                    qs = []
+                    for qid in ids:
+                        rows = db2.conn.execute(
+                            "SELECT id,grade,term,unit,section,difficulty,content,answer,"
+                            "options,knowledge_point,tags,source,created_at "
+                            "FROM questions WHERE id=?",
+                            (qid,)
+                        ).fetchall()
+                        if rows:
+                            r = rows[0]
+                            qs.append(Question(id=r[0], grade=r[1], term=r[2], unit=r[3],
+                                section=r[4], difficulty=r[5], content=r[6], answer=r[7],
+                                options=r[8], knowledge_point=r[9], tags=r[10], source=r[11],
+                                created_at=r[12]))
+                    if not qs:
+                        return "未找到对应题目", None
+                    exam = Exam(title="错题重练卷")
+                    exam.sections.append(ExamSection(title="错题重练", score_per_question=1,
+                        section_id="fill_blank", questions=qs))
+                    renderer = DocxRenderer(config)
+                    ts = datetime.now().strftime('%Y%m%d_%H%M%S')
+                    output_path = os.path.join(config.get_output_dir(), f'错题重练_{ts}.docx')
+                    filepath = renderer.render_with_answer(exam, output_path)
+                    # 标记为已复习
+                    for qid in ids:
+                        mgr.mark_reviewed(qid)
+                    return f"已生成错题重练卷（含答案），共{len(qs)}题", filepath
+                finally:
+                    db2.close()
+
+            def on_clear_wrong():
+                db2 = DBManager(config.get_db_path())
+                try:
+                    mgr = WrongAnswerManager(db2.conn)
+                    mgr.clear_all()
+                    return "错题本已清空", *on_refresh_wrong()
+                finally:
+                    db2.close()
+
+            btn_wrong_stats.click(fn=on_refresh_wrong, inputs=[],
+                                  outputs=[wrong_stats, wrong_detail, wrong_msg])
+            btn_wrong.click(fn=on_record_wrong, inputs=[wrong_qid, wrong_ans],
+                           outputs=[wrong_msg, wrong_stats, wrong_detail])
+            btn_gen_wrong.click(fn=on_gen_wrong_exam, inputs=[],
+                               outputs=[wrong_msg, file_dl])
+            btn_clear_wrong.click(fn=on_clear_wrong, inputs=[],
+                                 outputs=[wrong_msg, wrong_stats, wrong_detail])
+
+        # ===== Tab 4: 系统设置 =====
         with gr.Tab("系统设置"):
             gr.Markdown(on_show_config())
             gr.Markdown(

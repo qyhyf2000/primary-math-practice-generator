@@ -101,6 +101,49 @@ class DocxRenderer:
         pBdr.append(bottom)
         pPr.append(pBdr)
 
+    def render_with_answer(self, exam: Exam, output_path: str) -> str:
+        """渲染试卷 + 答案页（家长版）"""
+        doc = Document()
+        setup_page(doc, self.rendering_cfg)
+
+        # === 学生版（前几页） ===
+        self._render_title(doc, exam.title + "（学生版）")
+        self._render_student_info(doc)
+        self._render_separator(doc)
+
+        for section in exam.sections:
+            render_section_heading(doc, section)
+            render_fn = RENDERER_MAP.get(section.section_id)
+            if render_fn:
+                render_fn(doc, section)
+            else:
+                self._render_fallback(doc, section)
+
+        # === 分页：答案页 ===
+        doc.add_page_break()
+
+        self._render_title(doc, exam.title + "（参考答案）")
+        p_note = doc.add_paragraph()
+        p_note.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        run_note = p_note.add_run("—— 家长批改专用，请勿给学生 ——")
+        set_cjk_font(run_note, self.fonts["body"], 10)
+
+        for section in exam.sections:
+            # 题型标题
+            render_section_heading(doc, section)
+            for idx, q in enumerate(section.questions):
+                p = doc.add_paragraph()
+                p.paragraph_format.space_after = Pt(2)
+                ans_text = q.answer or ""
+                if q.options and q.section == "choice":
+                    ans_text = f"{q.answer}"
+                run = p.add_run(f"{idx + 1}. {ans_text}")
+                set_cjk_font(run, self.fonts["body"], 11)
+
+        os.makedirs(os.path.dirname(output_path), exist_ok=True)
+        doc.save(output_path)
+        return output_path
+
     def _render_fallback(self, doc, section):
         """兜底渲染 — 段落形式逐题输出"""
         for idx, q in enumerate(section.questions):
