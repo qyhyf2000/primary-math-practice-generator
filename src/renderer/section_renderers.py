@@ -80,15 +80,15 @@ def _render_graphic_question(doc, idx: int, q):
     gtype = info.get("type", "")
 
     if gtype == "angle_identify":
-        angles = [(a["label"], a["symbol"]) for a in info.get("angles", [])]
+        angles = info.get("angles", [])
         render_angle_question(doc, idx + 1, q.content, angles)
 
     elif gtype == "angle_judge":
-        shapes = [(s["symbol"], s["label"]) for s in info.get("shapes", [])]
+        shapes = info.get("shapes", [])
         render_shape_judge_question(doc, idx + 1, q.content, shapes)
 
     elif gtype == "count_angles":
-        shapes = [(s["symbol"], s["label"]) for s in info.get("shapes", [])]
+        shapes = info.get("shapes", [])
         render_count_angles_question(doc, idx + 1, q.content, shapes)
 
     elif gtype == "grid_count":
@@ -128,7 +128,7 @@ def _render_graphic_question(doc, idx: int, q):
         )
 
     elif gtype == "shape_classify":
-        shapes = [(s["symbol"], s.get("label", "")) for s in info.get("shapes", [])]
+        shapes = info.get("shapes", [])
         render_shape_classify_question(doc, idx + 1, q.content, shapes)
 
     elif gtype == "tangram":

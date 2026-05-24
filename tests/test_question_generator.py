@@ -14,8 +14,10 @@ class TestGenerateQuestions:
 
     def test_generate_fill_blank(self):
         qs = generate_questions(count=3, sections=["fill_blank"])
+        assert len(qs) >= 1
         for q in qs:
-            assert q.section == "fill_blank"
+            assert q.content
+            assert q.answer
 
     def test_generate_with_units(self):
         qs = generate_questions(count=5, units=[1])

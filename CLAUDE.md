@@ -4,88 +4,92 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## 项目概述
 
-小学数学练习试卷生成系统 — 北师大版二年级下册。自动生成含口算、填空、选择、竖式计算、应用题的 Word 试卷（.docx），支持图形题（角、钟面、立方体等）的表格+Unicode 渲染。
+小学数学练习试卷生成系统 — 北师大版二年级下册。CLI + Gradio Web UI，自动生成含口算、填空、选择、竖式计算、应用题的 Word 试卷（.docx）。图形题（角、钟面、立方体、网格）用 PIL 绘制后嵌入 Word。
 
 ## 常用命令
 
 ```bash
-# 安装依赖
 pip install -r requirements.txt
 
-# CLI 生成试卷
+# CLI
 python main.py generate                          # 全单元全题型
 python main.py generate --week 12                # 指定周次
 python main.py generate --units 1,2,5            # 限定单元
-python main.py generate --type 图形题             # 限定题型（口算题/填空题/选择题/竖式/解决问题/图形题）
+python main.py generate --type 图形题             # 限定题型
+python main.py status                            # 题库统计
+python main.py sync                              # 手动同步（算法生成+抓取+导入）
+python main.py seed --reload                     # 重置并重导种子数据
+python main.py ui                                # 启动 Gradio Web UI
 
-# 启动 Web UI
-python main.py ui
-# 或
-python app.py
-
-# 题库管理
-python main.py status                            # 查看统计
-python main.py sync                              # 手动触发更新（算法生成+网络抓取+本地导入）
-python main.py seed --reload                     # 重置题库并重新导入种子数据
+# 测试
+python -m pytest tests/ -v                       # 全部测试
+python -m pytest tests/test_db_manager.py -v     # 单个测试文件
 ```
 
 ## 架构
 
 ```
-config.yaml  →  ConfigManager
-                   ↓
-question_bank/  →  DBManager (SQLite)  ←  seed_data (内置169题)
-                   ↓                      ←  question_generator (算法生成)
-                   ↓                      ←  scrapers (无忧考网等抓取)
-                   ↓                      ←  sync_engine (编排以上来源)
-generator/     →  ExamBuilder  →  QuestionPicker (分层随机+排重)
+config.yaml → ConfigManager
+                  ↓
+question_bank/  →  DBManager (SQLite)  ←  seed_data (内置168题)
+                  ↓                      ←  question_generator (算法生成)
+                  ↓                      ←  scrapers (无忧考网/瑞文网)
+                  ↓                      ←  sync_engine (编排以上来源)
+generator/     →  ExamBuilder → QuestionPicker (难度分层 + 使用次数分层)
                                     ↓
-renderer/      →  DocxRenderer  →  section_renderers (普通题型)
-                              →  graphics_renderer (图形题，表格+Unicode)
+renderer/      →  DocxRenderer → section_renderers (普通题型 + 图形路由)
+                              → graphics_renderer (PIL 绘制: 立方体/角/钟面/网格)
 ```
-
-**4 层流水线：**
-1. **ConfigManager** — 读取 `config.yaml`，年级/题型/难度/排版全部由配置驱动
-2. **Question Bank** — SQLite 存储（`data/question_bank.db`），4 种来源：种子数据、算法生成、网络抓取、本地文件导入
-3. **Generator** — `ExamBuilder` 按配置的题型结构组装试卷，`QuestionPicker` 做分层随机抽样（低难度40% + 高难度40% + 弹性20%）
-4. **Renderer** — python-docx 生成 .docx，`section_renderers` 处理普通题型，`graphics_renderer` 处理图形题
 
 ## 关键约定
 
+### 选题层级机制（tier-based selection）
+
+题目不再按时间窗口排除，而是按**历史使用次数**分 tier：tier 0（从未用过）→ 优先抽取，tier 1（用过1次）→ 次之，依此类推。所有题最终循环复用。
+
+- `DBManager.get_questions_by_tier()` — LEFT JOIN `exam_history` 统计使用次数，按 tier ASC 排列
+- `QuestionPicker._pick_by_tier()` — 从低 tier 逐级选取，同级内随机
+- `DBManager.record_exam()` — 每次生成写入 `exam_history`，驱动下次 tier 计算
+
 ### 图形题的 tags 编码
 
-图形题在 `tags` 字段中以 `graphic:` 前缀嵌入 JSON 渲染指令。`section_renderers._parse_graphic_info()` 负责解析，根据 `type` 字段路由到 `graphics_renderer` 中对应的渲染函数。
+图形题在 `tags` 字段中以 `graphic:` 前缀嵌入 JSON 渲染指令。section_renderers 中的 `_parse_graphic_info()` 解析，根据 `type` 路由到 `graphics_renderer` 对应函数。
 
 ```python
-# 种子数据中：
-tags = "图形,数角,graphic:{\"type\":\"count_angles\",\"shapes\":[...]}"
-
-# 算法生成器中：
-tags = f"图形,数角,graphic:{json.dumps(graphic, ensure_ascii=False)}"
+tags = "图形,立方体,graphic:{\"type\":\"cube_stack\",\"grid\":[[2,1],[1,0]]}"
 ```
 
-支持的 `type`：`angle_identify`, `angle_judge`, `count_angles`, `grid_count`, `draw_grid`, `draw_angle`, `clock`, `clock_time`, `cube_stack`, `cube_view`, `shape_classify`, `tangram`, `parallelogram`
+支持的 `type` 及渲染方式：
 
-### 排重机制
-
-`DBManager.record_exam()` 将试卷中所有题目 ID 写入 `exam_history` 表。下次生成时 `get_recently_used_ids(weeks=N)` 排除最近 N 周内用过的题目。排重窗口由 `config.yaml` 中 `dedup_window_weeks` 控制（默认4周）。
+| type | 渲染函数 | 方式 |
+|------|---------|------|
+| `angle_identify` | `render_angle_question` | PIL 120×120px 角图 |
+| `angle_judge` | `render_shape_judge_question` | 表格+符号 |
+| `count_angles` | `render_count_angles_question` | 表格+符号 |
+| `grid_count` | `render_grid_count_question` | PIL 网格图 |
+| `draw_grid` | `render_grid_count_question` | PIL 方格纸 |
+| `draw_angle` | `render_angle_drawing` | 留白画角区 |
+| `clock` | `render_clock_question` | PIL 钟面图 |
+| `clock_time` | `render_clock_time_question` | PIL 空白钟面 |
+| `cube_stack` | `render_cube_stack_question` | PIL 等轴测立体图 |
+| `cube_view` | `render_cube_view_question` | 表格+符号 |
+| `shape_classify` | `render_shape_classify_question` | 表格+Unicode |
+| `tangram` | `render_tangram_question` | 着色表格 |
+| `parallelogram` | `render_parallelogram_question` | 表格对比 |
 
 ### 题型过滤的两种模式
 
-- `section_filter` — 按 section ID 过滤（如 `["oral_calc", "word_problem"]`），图形题会出现在其所属的 section 中
-- `tag_filter` — 按标签过滤（如 `"图形"`），跨 section 搜索。用于"只出图形题"场景
+- `section_filter` — 按 section ID 过滤（如 `["oral_calc", "word_problem"]`），图形题出现在所属 section 中
+- `tag_filter` — 按标签过滤（如 `"图形"`），跨 section 搜索，用于"只出图形题"场景
 
-### 数据库路径
+### 数据库
 
-`DBManager` 接受相对路径时相对于项目根目录。`ConfigManager.get_db_path()` 自动将 `config.yaml` 中的相对路径转为绝对路径。测试可用 `':memory:'`。
+- SQLite，路径由 `config.yaml` → `question_bank.db_path` 配置
+- `ConfigManager.get_db_path()` 相对于项目根目录解析
+- `DBManager` 支持上下文管理器（`with DBManager(...) as db:`），测试可用 `':memory:'`
 
 ### 升年级时的修改点
 
-1. `config.yaml` — 修改 `grade.name`、`grade.term`
-2. `app.py` — 修改 `UNIT_NAMES` 字典
-3. `src/question_bank/seed_data.py` — 更新种子题目
-4. `src/question_bank/question_generator.py` — 调整 `RANGES` 数值范围和生成器列表
-
-## 网络抓取
-
-`scrapers.py` 支持无忧考网 (51test.net) 和瑞文网 (ruiwen.com)。内置重试机制和中文编码自动检测。`_extract_answer_section()` 尝试从页面中分离答案区域，`_parse_answer_list()` 将其解析为题号→答案的映射。`quick_test_scrape(url)` 可用于调试抓取效果。
+1. `config.yaml` — 修改 `grade.name`、`grade.term`、`grade.units` 列表
+2. `src/question_bank/seed_data.py` — 更新种子题目
+3. `src/question_bank/question_generator.py` — 调整 `RANGES` 数值范围和生成器列表
