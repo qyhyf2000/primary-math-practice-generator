@@ -77,6 +77,15 @@ class ExamBuilder:
                 continue
 
             if questions:
+                # 严格验证：所有题目必须属于当前年级/学期
+                for q in questions:
+                    if q.grade != grade or q.term != term:
+                        logger.error(
+                            f"年级不匹配: 期望G{grade}T{term}, "
+                            f"实际G{q.grade}T{q.term}, 题目{q.content[:30]}"
+                        )
+                questions = [q for q in questions if q.grade == grade and q.term == term]
+
                 section = ExamSection(
                     title=section_cfg["title"],
                     score_per_question=section_cfg["score_per_question"],
