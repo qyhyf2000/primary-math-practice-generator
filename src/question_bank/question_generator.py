@@ -1933,191 +1933,230 @@ def _register(section: str, fn: Callable, condition: Callable[[GradeProfile], bo
 
 
 def _register_all():
-    """注册所有生成器（在模块加载时调用）"""
-    # -- 一年级口算 --
+    """注册所有生成器——按年级段严格分层"""
+    # ================================================================
+    # G1-G2: 基础运算 + 钟表 + 图形辨认
+    # ================================================================
     _register("oral_calc", _gen_oral_add_1digit,
-              lambda p: p.max_number <= 20)
+              lambda p: p.grade <= 1)
     _register("oral_calc", _gen_oral_sub_1digit,
-              lambda p: p.max_number <= 20)
+              lambda p: p.grade <= 1)
     _register("oral_calc", _gen_oral_add_carry,
-              lambda p: p.max_number <= 20)
+              lambda p: p.grade <= 2)
     _register("oral_calc", _gen_oral_sub_borrow,
-              lambda p: p.max_number <= 20)
+              lambda p: p.grade <= 2)
     _register("oral_calc", _gen_oral_2digit_add_1digit,
-              lambda p: p.max_digits >= 2 and not p.supports_multiplication)
+              lambda p: 1 <= p.grade <= 2)
     _register("oral_calc", _gen_oral_2digit_sub_1digit,
-              lambda p: p.max_digits >= 2 and not p.supports_multiplication)
+              lambda p: 1 <= p.grade <= 2)
     _register("oral_calc", _gen_oral_round_add,
-              lambda p: p.max_digits >= 2)
-    # -- 一年级填空 --
+              lambda p: p.grade <= 3)
     _register("fill_blank", _gen_fb_num_sequence,
-              lambda p: p.max_digits <= 2)
+              lambda p: p.grade <= 2)
     _register("fill_blank", _gen_fb_compare_num,
-              lambda p: True)  # 全年级适用
+              lambda p: p.grade <= 3)
     _register("fill_blank", _gen_fb_number_name,
-              lambda p: p.max_digits <= 2)
-    _register("fill_blank", _gen_fb_shape_name,
-              lambda p: True)
+              lambda p: p.grade <= 2)
     _register("fill_blank", _gen_fb_position,
-              lambda p: p.max_digits <= 2)
+              lambda p: p.grade <= 1)
+    _register("fill_blank", _gen_fb_shape_name,
+              lambda p: p.grade <= 3)
     _register("fill_blank", _gen_fb_clock_hour,
-              lambda p: True)
+              lambda p: p.grade <= 2)
 
-    # -- 二上口算：乘法口诀 --
+    # ================================================================
+    # G2-G3: 乘除入门 + 混合运算 + 长度 + 角
+    # ================================================================
     _register("oral_calc", _gen_oral_mult_table,
-              lambda p: p.supports_multiplication and p.times_table_max > 0
-                        and not p.supports_remainder)
-    _register("oral_calc", _gen_oral_div_table_basic,
-              lambda p: p.supports_division and p.times_table_max > 0
-                        and not p.supports_remainder)
-    _register("oral_calc", _gen_oral_money,
-              lambda p: p.supports_multiplication and p.times_table_max > 0)
-    _register("oral_calc", _gen_oral_cm_m,
-              lambda p: p.max_digits >= 2 and not p.supports_remainder)
-    _register("fill_blank", _gen_fb_mult_meaning,
-              lambda p: p.supports_multiplication and p.times_table_max > 0)
-    _register("fill_blank", _gen_fb_money_word,
-              lambda p: p.supports_multiplication and p.times_table_max > 0)
-    # -- 三上：混合运算 + 大数 + 估算 --
-    _register("oral_calc", _gen_oral_mix_2step,
-              lambda p: p.supports_multiplication and p.max_digits >= 3)
-    _register("oral_calc", _gen_oral_mm_cm_km,
-              lambda p: p.max_digits >= 3)
-    _register("fill_blank", _gen_fb_estimate,
-              lambda p: p.max_digits >= 3 and not p.supports_decimals)
-    _register("oral_calc", _gen_oral_mult_1digit,
-              lambda p: p.supports_multiplication and p.max_digits >= 3)
-    # -- 三下：两位数乘法 + 周长 + 分数 --
-    _register("oral_calc", _gen_oral_2digit_mult,
-              lambda p: p.supports_multiplication and p.max_digits >= 3)
-    _register("oral_calc", _gen_oral_div_1digit,
-              lambda p: p.supports_division and p.max_digits >= 3)
-    _register("fill_blank", _gen_fb_perimeter,
-              lambda p: p.supports_multiplication and p.max_digits >= 3)
-    _register("fill_blank", _gen_fb_fraction_basic,
-              lambda p: p.supports_fractions)
-    # -- 四上：大数 + 角度 --
-    _register("fill_blank", _gen_fb_large_number,
-              lambda p: p.max_digits >= 8)
-    _register("fill_blank", _gen_fb_angle_measure,
-              lambda p: p.geometry_angles and p.max_digits >= 3)
-    # -- 四下~五上：小数 + 三角形 + 方程 + 多边形面积 + 因数 --
-    _register("oral_calc", _gen_oral_decimal_add,
-              lambda p: p.supports_decimals)
-    _register("oral_calc", _gen_oral_decimal_mult,
-              lambda p: p.supports_decimals and p.supports_multiplication)
-    _register("fill_blank", _gen_fb_triangle,
-              lambda p: p.geometry_shapes and p.max_digits >= 3
-                        and not p.supports_fractions)
-    _register("fill_blank", _gen_fb_equation,
-              lambda p: p.supports_multiplication and p.max_digits >= 3)
-    _register("fill_blank", _gen_fb_polygon_area,
-              lambda p: p.supports_decimals and p.supports_multiplication)
-    _register("fill_blank", _gen_fb_factor_multiple,
-              lambda p: p.supports_multiplication and p.max_digits >= 3
-                        and not p.supports_decimals)
-    # -- 五下~六上：分数 + 长方体 + 圆 + 百分数 + 比 --
-    _register("oral_calc", _gen_oral_fraction_op,
-              lambda p: p.supports_fractions)
-    _register("fill_blank", _gen_fb_cuboid,
-              lambda p: p.geometry_cubes and p.supports_fractions)
-    _register("fill_blank", _gen_fb_circle,
-              lambda p: p.supports_fractions and p.supports_decimals)
-    _register("oral_calc", _gen_oral_percent,
-              lambda p: p.supports_decimals and p.supports_fractions)
-    _register("fill_blank", _gen_fb_ratio,
-              lambda p: p.supports_fractions and p.supports_decimals)
-    # -- 六下：圆柱 + 比例 --
-    _register("fill_blank", _gen_fb_cylinder,
-              lambda p: p.geometry_cubes and p.supports_fractions)
-    _register("fill_blank", _gen_fb_proportion,
-              lambda p: p.supports_fractions and p.supports_decimals)
-    # -- 应用题：按年级分段 --
-    _register("word_problem", _gen_word_problem,
-              lambda p: p.grade <= 2)          # 一二年级：基础应用题
-    _register("word_problem", _gen_word_problem_mid,
-              lambda p: 3 <= p.grade <= 4)      # 三四年级：多步运算、周长面积
-    _register("word_problem", _gen_word_problem_high,
-              lambda p: p.grade >= 5)           # 五六年级：分数、百分数、几何
-
-    # -- 口算题 --
+              lambda p: 2 <= p.grade <= 3)
     _register("oral_calc", _gen_oral_div_table,
-              lambda p: p.supports_division and p.times_table_max > 0)
+              lambda p: 2 <= p.grade <= 3)
+    _register("oral_calc", _gen_oral_div_table_basic,
+              lambda p: 2 <= p.grade <= 3)
     _register("oral_calc", _gen_oral_div_remainder,
-              lambda p: p.supports_remainder)
+              lambda p: 2 <= p.grade <= 3)
+    _register("oral_calc", _gen_oral_money,
+              lambda p: 2 <= p.grade <= 3)
+    _register("oral_calc", _gen_oral_cm_m,
+              lambda p: 2 <= p.grade <= 3)
     _register("oral_calc", _gen_oral_mix_mult_add,
-              lambda p: p.supports_multiplication)
+              lambda p: 2 <= p.grade <= 3)
     _register("oral_calc", _gen_oral_mix_div_sub,
-              lambda p: p.supports_division)
+              lambda p: 2 <= p.grade <= 3)
     _register("oral_calc", _gen_oral_mix_paren,
-              lambda p: p.supports_multiplication)
+              lambda p: 2 <= p.grade <= 4)
     _register("oral_calc", _gen_oral_length,
-              lambda p: len(p.length_units) > 0)
-    _register("oral_calc", _gen_oral_3digit_add,
-              lambda p: p.max_digits >= 3)
-    _register("oral_calc", _gen_oral_3digit_sub,
-              lambda p: p.max_digits >= 3)
+              lambda p: 2 <= p.grade <= 4)
     _register("oral_calc", _gen_oral_time,
-              lambda p: len(p.time_units) > 0)
-
-    # -- 填空题 --
+              lambda p: 1 <= p.grade <= 3)
+    _register("fill_blank", _gen_fb_mult_meaning,
+              lambda p: 2 <= p.grade <= 3)
+    _register("fill_blank", _gen_fb_money_word,
+              lambda p: 2 <= p.grade <= 3)
     _register("fill_blank", _gen_fb_remainder_relation,
-              lambda p: p.supports_remainder)
+              lambda p: 2 <= p.grade <= 3)
     _register("fill_blank", _gen_fb_find_dividend,
-              lambda p: p.supports_division)
+              lambda p: 2 <= p.grade <= 3)
     _register("fill_blank", _gen_fb_mix_order,
-              lambda p: p.supports_multiplication)
-    _register("fill_blank", _gen_fb_reading,
-              lambda p: p.max_digits >= 4)
-    _register("fill_blank", _gen_fb_compare,
-              lambda p: p.max_digits >= 3)
-    _register("fill_blank", _gen_fb_unit_conv,
-              lambda p: len(p.length_units) > 0)
-    _register("fill_blank", _gen_fb_length_select,
-              lambda p: len(p.length_units) > 0)
+              lambda p: 2 <= p.grade <= 3)
     _register("fill_blank", _gen_fb_angle,
-              lambda p: p.geometry_angles)
+              lambda p: 2 <= p.grade <= 4)
     _register("fill_blank", _gen_fb_clock_walk,
-              lambda p: len(p.time_units) >= 2)
+              lambda p: 1 <= p.grade <= 3)
     _register("fill_blank", _gen_fb_elapsed_time,
-              lambda p: len(p.time_units) >= 2)
-    # 图形题生成器（填空）
+              lambda p: 2 <= p.grade <= 4)
     _register("fill_blank", _gen_gfx_count_angles,
-              lambda p: p.geometry_angles)
+              lambda p: 2 <= p.grade <= 4)
     _register("fill_blank", _gen_gfx_angle_identify,
-              lambda p: p.geometry_angles)
-    _register("fill_blank", _gen_gfx_grid_count,
-              lambda p: p.geometry_shapes)
+              lambda p: 2 <= p.grade <= 4)
     _register("fill_blank", _gen_clock_read,
-              lambda p: len(p.time_units) >= 2)
+              lambda p: 1 <= p.grade <= 3)
     _register("fill_blank", _gen_clock_elapsed,
-              lambda p: len(p.time_units) >= 2)
+              lambda p: 2 <= p.grade <= 4)
     _register("fill_blank", _gen_cube_stack,
-              lambda p: p.geometry_cubes)
+              lambda p: 2 <= p.grade <= 4)
     _register("fill_blank", _gen_cube_view,
-              lambda p: p.geometry_cubes)
-    _register("fill_blank", _gen_gfx_shape_classify,
-              lambda p: p.geometry_shapes)
-    _register("fill_blank", _gen_gfx_parallelogram,
-              lambda p: p.geometry_shapes)
-
-    # -- 选择题 --
+              lambda p: 3 <= p.grade <= 5)
     _register("choice", _gen_ch_round_up,
-              lambda p: p.supports_division)
+              lambda p: 2 <= p.grade <= 3)
     _register("choice", _gen_ch_remainder_max,
-              lambda p: p.supports_remainder)
+              lambda p: 2 <= p.grade <= 3)
     _register("choice", _gen_ch_angle_size,
-              lambda p: p.geometry_angles)
+              lambda p: 2 <= p.grade <= 4)
     _register("choice", _gen_ch_time_diff,
-              lambda p: len(p.time_units) >= 2)
-
-    # -- 竖式计算 --
+              lambda p: 2 <= p.grade <= 3)
     _register("vertical_calc", _gen_vc_div_vertical,
-              lambda p: p.supports_division)
+              lambda p: 2 <= p.grade <= 3)
     _register("vertical_calc", _gen_vc_mix_detach,
-              lambda p: p.supports_multiplication)
+              lambda p: 2 <= p.grade <= 3)
+
+    # ================================================================
+    # G3-G4: 大数 + 多步运算 + 周长面积 + 小数入门
+    # ================================================================
+    _register("oral_calc", _gen_oral_3digit_add,
+              lambda p: 3 <= p.grade <= 4)
+    _register("oral_calc", _gen_oral_3digit_sub,
+              lambda p: 3 <= p.grade <= 4)
+    _register("oral_calc", _gen_oral_mix_2step,
+              lambda p: 3 <= p.grade <= 4)
+    _register("oral_calc", _gen_oral_mm_cm_km,
+              lambda p: 3 <= p.grade <= 4)
+    _register("oral_calc", _gen_oral_mult_1digit,
+              lambda p: 3 <= p.grade <= 4)
+    _register("oral_calc", _gen_oral_2digit_mult,
+              lambda p: 3 <= p.grade <= 5)
+    _register("oral_calc", _gen_oral_div_1digit,
+              lambda p: 3 <= p.grade <= 5)
+    _register("oral_calc", _gen_oral_decimal_add,
+              lambda p: 3 <= p.grade <= 5)
+    _register("fill_blank", _gen_fb_reading,
+              lambda p: 3 <= p.grade <= 4)
+    _register("fill_blank", _gen_fb_compare,
+              lambda p: 3 <= p.grade <= 4)
+    _register("fill_blank", _gen_fb_unit_conv,
+              lambda p: 2 <= p.grade <= 4)
+    _register("fill_blank", _gen_fb_length_select,
+              lambda p: 2 <= p.grade <= 4)
+    _register("fill_blank", _gen_fb_estimate,
+              lambda p: 3 <= p.grade <= 4)
+    _register("fill_blank", _gen_fb_perimeter,
+              lambda p: 3 <= p.grade <= 4)
+    _register("fill_blank", _gen_fb_triangle,
+              lambda p: 3 <= p.grade <= 5)
+    _register("fill_blank", _gen_fb_large_number,
+              lambda p: 3 <= p.grade <= 5)
+    _register("fill_blank", _gen_fb_angle_measure,
+              lambda p: 3 <= p.grade <= 5)
+    _register("fill_blank", _gen_gfx_grid_count,
+              lambda p: 2 <= p.grade <= 4)
+    _register("fill_blank", _gen_gfx_shape_classify,
+              lambda p: 2 <= p.grade <= 4)
+    _register("fill_blank", _gen_gfx_parallelogram,
+              lambda p: 2 <= p.grade <= 4)
     _register("vertical_calc", _gen_vc_3digit_vertical,
-              lambda p: p.max_digits >= 3)
+              lambda p: 3 <= p.grade <= 4)
+
+    # ================================================================
+    # G4-G5: 运算律 + 方程 + 多边形面积 + 分数入门 + 因数倍数
+    # ================================================================
+    _register("oral_calc", _gen_oral_decimal_mult,
+              lambda p: 4 <= p.grade <= 6)
+    _register("fill_blank", _gen_fb_equation,
+              lambda p: 4 <= p.grade <= 6)
+    _register("fill_blank", _gen_fb_polygon_area,
+              lambda p: 4 <= p.grade <= 6)
+    _register("fill_blank", _gen_fb_factor_multiple,
+              lambda p: 4 <= p.grade <= 5)
+    _register("fill_blank", _gen_fb_fraction_basic,
+              lambda p: 3 <= p.grade <= 5)
+
+    # ================================================================
+    # G5-G6: 分数运算 + 百分数 + 比和比例 + 圆/圆柱
+    # ================================================================
+    _register("oral_calc", _gen_oral_fraction_op,
+              lambda p: p.grade >= 5)
+    _register("oral_calc", _gen_oral_percent,
+              lambda p: p.grade >= 5)
+    _register("oral_calc", _gen_oral_decimal_mult,
+              lambda p: p.grade >= 4)  # 高年级仍需小数运算
+    _register("oral_calc", _gen_oral_decimal_add,
+              lambda p: p.grade >= 3)  # 扩大到G3-G6
+    _register("oral_calc", _gen_oral_3digit_add,
+              lambda p: 3 <= p.grade <= 6)  # 扩大到G6
+    _register("oral_calc", _gen_oral_3digit_sub,
+              lambda p: 3 <= p.grade <= 6)
+    _register("oral_calc", _gen_oral_mix_paren,
+              lambda p: p.grade >= 2)  # 扩大到全年级
+    _register("oral_calc", _gen_oral_2digit_mult,
+              lambda p: p.grade >= 3)
+    _register("oral_calc", _gen_oral_div_1digit,
+              lambda p: p.grade >= 3)
+    _register("fill_blank", _gen_fb_cuboid,
+              lambda p: 5 <= p.grade <= 6)
+    _register("fill_blank", _gen_fb_circle,
+              lambda p: p.grade >= 5)
+    _register("fill_blank", _gen_fb_ratio,
+              lambda p: p.grade >= 5)
+    _register("fill_blank", _gen_fb_cylinder,
+              lambda p: p.grade >= 6)
+    _register("fill_blank", _gen_fb_proportion,
+              lambda p: p.grade >= 6)
+    _register("fill_blank", _gen_fb_large_number,
+              lambda p: p.grade >= 3)  # 扩大到全中高年级
+    _register("fill_blank", _gen_fb_compare_num,
+              lambda p: p.grade >= 1)  # 全年级通用，数值自动适配
+    _register("fill_blank", _gen_fb_equation,
+              lambda p: p.grade >= 4)
+    _register("fill_blank", _gen_fb_polygon_area,
+              lambda p: p.grade >= 4)
+    _register("fill_blank", _gen_fb_triangle,
+              lambda p: p.grade >= 3)
+    _register("fill_blank", _gen_fb_angle_measure,
+              lambda p: p.grade >= 3)
+    _register("fill_blank", _gen_fb_compare,
+              lambda p: 3 <= p.grade <= 6)  # 扩大到G6
+    _register("fill_blank", _gen_fb_fraction_basic,
+              lambda p: 3 <= p.grade <= 6)
+    _register("fill_blank", _gen_fb_perimeter,
+              lambda p: p.grade >= 3)
+    _register("choice", _gen_ch_angle_size,
+              lambda p: p.grade >= 2)  # 扩大到全中高年级
+    _register("choice", _gen_ch_time_diff,
+              lambda p: p.grade >= 2)
+    _register("vertical_calc", _gen_vc_3digit_vertical,
+              lambda p: p.grade >= 3)  # 扩大到全中高年级
+    _register("vertical_calc", _gen_vc_mix_detach,
+              lambda p: p.grade >= 2)  # 扩大到全中高年级
+
+    # ================================================================
+    # 应用题：按年级三段式
+    # ================================================================
+    _register("word_problem", _gen_word_problem,
+              lambda p: p.grade <= 2)
+    _register("word_problem", _gen_word_problem_mid,
+              lambda p: 3 <= p.grade <= 4)
+    _register("word_problem", _gen_word_problem_high,
+              lambda p: p.grade >= 5)
 
 
 # 模块加载时执行注册
